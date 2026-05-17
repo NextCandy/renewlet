@@ -9,20 +9,25 @@
 import { useMemo, useState } from 'react';
 import type { Subscription, SubscriptionDraft } from '@/types/subscription';
 import { Header } from '@/components/header';
+import { BackToTopFloatButton } from '@/components/back-to-top-float-button';
 import { SubscriptionCalendar } from '@/components/subscription-calendar';
 import { EditSubscriptionDialog } from '@/components/edit-subscription-dialog';
 import { CalendarSkeleton } from '@/components/loading-skeleton';
 import { useCreateSubscription, useSubscriptions, useUpdateSubscription } from '@/hooks/use-subscriptions';
 import { collectSubscriptionTags } from '@/modules/subscriptions/domain/subscription-filters';
 import { useI18n } from '@/i18n/I18nProvider';
+import { useMediaQuery } from '@/hooks/use-media-query';
+
+const EMPTY_SUBSCRIPTIONS: Subscription[] = [];
 
 /** 日历页组件。 */
 const Calendar = () => {
   const subscriptionsQuery = useSubscriptions();
-  const subscriptions = subscriptionsQuery.data ?? [];
+  const subscriptions = subscriptionsQuery.data ?? EMPTY_SUBSCRIPTIONS;
   const createSubscription = useCreateSubscription();
   const updateSubscription = useUpdateSubscription();
   const { t } = useI18n();
+  const isMobileCalendarPage = useMediaQuery("(max-width: 639px)");
   const availableTags = useMemo(() => collectSubscriptionTags(subscriptions), [subscriptions]);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -84,6 +89,8 @@ const Calendar = () => {
         onSave={handleSaveSubscription}
         availableTags={availableTags}
       />
+      {/* 按需求日历页只在 H5 端启用，桌面端保持现有页面密度和视觉重心不变。 */}
+      <BackToTopFloatButton enabled={isMobileCalendarPage} />
     </div>
   );
 };

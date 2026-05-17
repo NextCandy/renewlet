@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from 'react';
 import { Header } from '@/components/header';
+import { BackToTopFloatButton } from '@/components/back-to-top-float-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -463,6 +464,13 @@ export function SettingsScreen() {
           </div>
         </div>
       </main>
+
+      {/* 未保存设置底部栏会占用右下角操作区；按钮上移，避免遮挡保存/放弃这两个关键操作。 */}
+      <BackToTopFloatButton
+        bottomOffsetClassName={hasUnsavedChanges
+          ? "bottom-[calc(11rem+env(safe-area-inset-bottom))] sm:bottom-[calc(5.75rem+env(safe-area-inset-bottom))]"
+          : undefined}
+      />
 
       {hasUnsavedChanges ? (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-sm">

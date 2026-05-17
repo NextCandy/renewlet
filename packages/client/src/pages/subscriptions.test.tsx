@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -242,6 +242,20 @@ describe("Subscriptions page sorting", () => {
       expect(visibleSubscriptionNames()).toEqual(["Annual USD", "Monthly CNY", "Quarterly CNY"]);
     });
     expect(screen.getByRole("combobox", { name: "排序" })).toHaveTextContent("默认顺序");
+  });
+
+  it("shows the back-to-top float button when the app root is scrolled", async () => {
+    renderSubscriptionsPage();
+    const root = document.getElementById("root");
+    if (!root) throw new Error("Expected #root test scroll container");
+    // jsdom 不会按卡片内容计算 #root 的真实滚动高度；这里手动设置，专门验证页面接线是否监听了正确容器。
+    Object.defineProperty(root, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(root, "clientHeight", { configurable: true, value: 800 });
+    root.scrollTop = 420;
+
+    fireEvent.scroll(root);
+
+    expect(await screen.findByRole("button", { name: "回到顶部" })).toBeInTheDocument();
   });
 });
 

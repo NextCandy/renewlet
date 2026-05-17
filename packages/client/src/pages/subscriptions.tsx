@@ -14,6 +14,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Header } from '@/components/header';
+import { BackToTopFloatButton } from '@/components/back-to-top-float-button';
 import { SubscriptionCard } from '@/components/subscription-card';
 import { AddSubscriptionDialog } from '@/components/add-subscription-dialog';
 import { EditSubscriptionDialog } from '@/components/edit-subscription-dialog';
@@ -482,6 +483,8 @@ const Subscriptions = () => {
           />
         )}
       </main>
+
+      <BackToTopFloatButton />
 
       <EditSubscriptionDialog
         subscription={editingSubscription}
