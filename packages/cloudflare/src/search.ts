@@ -11,7 +11,8 @@ import {
 } from "@renewlet/shared/schemas/media";
 import builtInIconsIndex from "../../client/src/lib/built-in-icons-index.json";
 import { getSettings } from "./db";
-import { json, privateShortCache, readJson, requestLocale, tr } from "./http";
+import { json, privateShortCache, readJson, requestLocale } from "./http";
+import { serverText } from "./server-i18n";
 import { requireAuth } from "./auth";
 import type { Env } from "./types";
 
@@ -25,7 +26,7 @@ export async function mediaCandidates(request: Request, env: Env): Promise<Respo
   if (retryAfter > 0) {
     return json({
       code: "RATE_LIMITED",
-      message: tr(locale, "请求过于频繁，请稍后再试", "Too many requests. Please try again later"),
+      message: serverText(locale, "rateLimit.tooManyRequests"),
     }, { status: 429, headers: { "retry-after": String(retryAfter) } });
   }
   const body = await readJson(request, mediaCandidateResolveRequestSchema, locale);

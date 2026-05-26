@@ -13,7 +13,8 @@ import { appSettingsSchema } from "@renewlet/shared/schemas/settings";
 import { customConfigSchema } from "@renewlet/shared/schemas/custom-config";
 import { cleanBuiltInIconSourceSettingsPatch, mergeBuiltInIconSourceSettings } from "@renewlet/shared/built-in-icons";
 import { getSettings, listSubscriptions, newId, nowIso, parseJsonObject } from "./db";
-import { requestLocale, json, readJsonWithLimit, HttpError, tr } from "./http";
+import { requestLocale, json, readJsonWithLimit, HttpError } from "./http";
+import { serverText } from "./server-i18n";
 import { requireAuth } from "./auth";
 import { subscriptionRowValues, toSubscriptionRow } from "./subscriptions";
 import type { Env, SubscriptionRow } from "./types";
@@ -58,7 +59,7 @@ export async function applyImport(request: Request, env: Env): Promise<Response>
   const existing = await listSubscriptions(env, auth.user.id);
   const preview = buildPreview(body.payload, body.conflictMode, existing, body.skipIndexes);
   if (preview.summary.errors > 0) {
-    throw new HttpError(400, tr(locale, "导入内容存在错误", "Import payload contains errors"), "IMPORT_PREVIEW_FAILED", preview);
+    throw new HttpError(400, serverText(locale, "import.previewFailed"), "IMPORT_PREVIEW_FAILED", preview);
   }
 
   const timestamp = nowIso();
@@ -266,7 +267,7 @@ function isImportKey(value: unknown): value is ImportSubscription["extra"]["impo
 
 function assertValidSkipIndexes(indexes: number[], subscriptionCount: number, locale: ReturnType<typeof requestLocale>): void {
   if (indexes.some((index) => index < 0 || index >= subscriptionCount)) {
-    throw new HttpError(400, tr(locale, "跳过项索引无效", "Invalid skipped item index"), "IMPORT_SKIP_INDEX_INVALID");
+    throw new HttpError(400, serverText(locale, "import.skipIndexInvalid"), "IMPORT_SKIP_INDEX_INVALID");
   }
 }
 

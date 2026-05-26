@@ -116,11 +116,11 @@ func handleImportPreview(app core.App, e *core.RequestEvent) error {
 	// 导入 payload 不包含二进制资产，但 5000 条订阅和 extra 元数据会超过普通 API 的 1MiB 上限。
 	body, err := decodeStrictJSONWithLimit[importPreviewRequest](e.Request, locale, maxImportJSONBodyBytes)
 	if err != nil {
-		return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+		return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 	}
 	response, err := previewImportPayload(app, e.Auth, body.Payload, body.ConflictMode, body.SkipIndexes)
 	if err != nil {
-		return e.BadRequestError(tr(locale, "导入内容无效", "Import payload is invalid"), err)
+		return e.BadRequestError(serverText(locale, "import.invalid"), err)
 	}
 	return e.JSON(http.StatusOK, response)
 }
@@ -130,17 +130,17 @@ func handleImportApply(app core.App, e *core.RequestEvent) error {
 	// apply 会重新预览再进事务，防止调用方篡改 preview 结果后直接写库。
 	body, err := decodeStrictJSONWithLimit[importApplyRequest](e.Request, locale, maxImportJSONBodyBytes)
 	if err != nil {
-		return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+		return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 	}
 	preview, err := previewImportPayload(app, e.Auth, body.Payload, body.ConflictMode, body.SkipIndexes)
 	if err != nil {
-		return e.BadRequestError(tr(locale, "导入内容无效", "Import payload is invalid"), err)
+		return e.BadRequestError(serverText(locale, "import.invalid"), err)
 	}
 	if preview.Summary.Errors > 0 {
-		return e.BadRequestError(tr(locale, "导入内容存在错误", "Import payload contains errors"), preview)
+		return e.BadRequestError(serverText(locale, "import.payloadContainsErrors"), preview)
 	}
 	if err := applyImportPayload(app, e.Auth, body.Payload, body.ConflictMode, body.SkipIndexes); err != nil {
-		return e.BadRequestError(tr(locale, "导入失败", "Import failed"), err)
+		return e.BadRequestError(serverText(locale, "import.applyFailed"), err)
 	}
 	return e.JSON(http.StatusOK, importApplyResponse{OK: true, importPreviewResponse: preview})
 }

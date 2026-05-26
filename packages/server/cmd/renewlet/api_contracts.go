@@ -77,7 +77,7 @@ func (r *setupCreateRequest) Validate(locale appLocale) error {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Email = strings.TrimSpace(r.Email)
 	if r.Name == "" || !isValidEmailAddress(r.Email) || len(r.Password) < 8 {
-		return errors.New(tr(locale, "管理员信息无效", "Invalid admin information"))
+		return errors.New(serverText(locale, "admin.invalidAdminInfo"))
 	}
 	return nil
 }
@@ -101,10 +101,10 @@ func (r *adminCreateUserRequest) Validate(locale appLocale) error {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Email = strings.TrimSpace(r.Email)
 	if r.Name == "" || !isValidEmailAddress(r.Email) || len(r.Password) < 8 {
-		return errors.New(tr(locale, "用户信息无效", "Invalid user information"))
+		return errors.New(serverText(locale, "admin.invalidUserInfo"))
 	}
 	if r.Role != "admin" && r.Role != "user" {
-		return errors.New(tr(locale, "角色无效", "Invalid role"))
+		return errors.New(serverText(locale, "admin.invalidRole"))
 	}
 	return nil
 }
@@ -126,18 +126,18 @@ type adminPatchUserRequest struct {
 // 为什么要求至少一个字段：空 patch 通常意味着前端状态机误触发，应该显式失败。
 func (r *adminPatchUserRequest) Validate(locale appLocale) error {
 	if r.Role == nil && r.Banned == nil && r.NewPassword == nil {
-		return errors.New(tr(locale, "请求参数无效", "Invalid request parameters"))
+		return errors.New(serverText(locale, "common.invalidRequestParameters"))
 	}
 	if r.Role != nil {
 		role := strings.TrimSpace(*r.Role)
 		if role != "admin" && role != "user" {
-			return errors.New(tr(locale, "角色无效", "Invalid role"))
+			return errors.New(serverText(locale, "admin.invalidRole"))
 		}
 		*r.Role = role
 	}
 	if r.NewPassword != nil {
 		if len(*r.NewPassword) < 8 {
-			return errors.New(tr(locale, "密码至少需要 8 位", "Password must be at least 8 characters"))
+			return errors.New(serverText(locale, "admin.passwordTooShort"))
 		}
 	}
 	return nil
@@ -152,7 +152,7 @@ type accountPasswordRequest struct {
 // Validate 校验账号密码修改请求。
 func (r *accountPasswordRequest) Validate(locale appLocale) error {
 	if r.CurrentPassword == "" || len(r.NewPassword) < 8 {
-		return errors.New(tr(locale, "密码至少需要 8 位", "Password must be at least 8 characters"))
+		return errors.New(serverText(locale, "admin.passwordTooShort"))
 	}
 	return nil
 }
@@ -233,16 +233,16 @@ func (r *mediaCandidateResolveRequest) Validate(locale appLocale) error {
 	r.Kind = strings.TrimSpace(r.Kind)
 	r.Mode = strings.TrimSpace(r.Mode)
 	if r.Kind != "logo" && r.Kind != "icon" {
-		return errors.New(tr(locale, "媒体类型无效", "Invalid media kind"))
+		return errors.New(serverText(locale, "media.kindInvalid"))
 	}
 	if r.Mode != "auto" && r.Mode != "search" {
-		return errors.New(tr(locale, "候选解析模式无效", "Invalid media candidate mode"))
+		return errors.New(serverText(locale, "media.modeInvalid"))
 	}
 	if len(r.Items) == 0 || len(r.Items) > mediaResolverCfg.Limits.MaxItems {
-		return errors.New(tr(locale, "候选解析条目数量无效", "Invalid media candidate item count"))
+		return errors.New(serverText(locale, "media.candidateItemCountInvalid"))
 	}
 	if r.Limit != nil && *r.Limit <= 0 {
-		return errors.New(tr(locale, "候选数量上限无效", "Invalid media candidate limit"))
+		return errors.New(serverText(locale, "media.candidateItemLimitInvalid"))
 	}
 	for index := range r.Items {
 		item := &r.Items[index]
@@ -250,7 +250,7 @@ func (r *mediaCandidateResolveRequest) Validate(locale appLocale) error {
 		item.Name = strings.TrimSpace(item.Name)
 		item.Website = strings.TrimSpace(item.Website)
 		if item.ID == "" || len([]rune(item.ID)) > 120 || item.Name == "" || len([]rune(item.Name)) > 120 || len([]rune(item.Website)) > 500 {
-			return errors.New(tr(locale, "候选解析条目无效", "Invalid media candidate item"))
+			return errors.New(serverText(locale, "media.candidateItemInvalid"))
 		}
 	}
 	return nil
@@ -399,15 +399,15 @@ func newHealthResponse() healthResponse {
 
 // invalidRequestBodyMessage 返回本地化请求体错误文案。
 func invalidRequestBodyMessage(locale appLocale) string {
-	return tr(locale, "请求体无效", "Invalid request body")
+	return serverText(locale, "common.invalidRequestBody")
 }
 
 // validationErrorMessage 优先透出 Validate 返回的具体错误。
-func validationErrorMessage(locale appLocale, fallbackZh string, fallbackEn string, err error) string {
+func validationErrorMessage(locale appLocale, fallbackKey string, err error) string {
 	if err != nil && strings.TrimSpace(err.Error()) != "" {
 		return err.Error()
 	}
-	return tr(locale, fallbackZh, fallbackEn)
+	return serverText(locale, fallbackKey)
 }
 
 // rawJSONIsNull 判断可选 RawMessage 是否显式传入 null。

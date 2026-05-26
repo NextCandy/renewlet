@@ -1,7 +1,8 @@
 import { changePasswordBodySchema } from "@renewlet/shared/schemas/account";
 import { loginBodySchema, setupCreateBodySchema, type SessionResponse } from "@renewlet/shared/schemas/auth";
 import { adminCreateUserBodySchema, adminPatchUserBodySchema } from "@renewlet/shared/schemas/admin";
-import { bearerToken, HttpError, json, ok, readJson, requestLocale, tr, type AppLocale } from "./http";
+import { bearerToken, HttpError, json, ok, readJson, requestLocale, type AppLocale } from "./http";
+import { serverText } from "./server-i18n";
 import {
   enabledAdminCount,
   findUserByEmail,
@@ -28,8 +29,8 @@ export async function setupStatus(request: Request, env: Env): Promise<Response>
 export async function createInitialAdmin(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   // 初始化只允许“还没有启用管理员”这一瞬间进入；Cloudflare 版没有 PocketBase installer 可兜底。
-  if (!setupEnabled(env)) throw new HttpError(403, tr(locale, "初始化已关闭", "Setup is disabled"));
-  if (await hasEnabledAdmin(env)) throw new HttpError(403, tr(locale, "系统已初始化", "System has already been initialized"));
+  if (!setupEnabled(env)) throw new HttpError(403, serverText(locale, "auth.setupDisabled"));
+  if (await hasEnabledAdmin(env)) throw new HttpError(403, serverText(locale, "auth.setupAlreadyInitialized"));
   const body = await readJson(request, setupCreateBodySchema, locale);
   const timestamp = nowIso();
   // email 唯一索引是初始化竞态的最后闸门；并发首装失败必须暴露为创建失败，而不是补兼容重试。
@@ -45,10 +46,10 @@ export async function login(request: Request, env: Env): Promise<Response> {
   const body = await readJson(request, loginBodySchema, locale);
   const user = await findUserByEmail(env, body.email.trim());
   if (!user || !(await verifyPassword(body.password, user.password_hash))) {
-    throw new HttpError(400, tr(locale, "邮箱或密码不正确", "Invalid email or password"));
+    throw new HttpError(400, serverText(locale, "auth.invalidEmailOrPassword"));
   }
   if (user.banned === 1) {
-    throw new HttpError(403, tr(locale, "账号已被禁用", "Account is disabled"));
+    throw new HttpError(403, serverText(locale, "auth.accountDisabled"));
   }
   const token = randomToken();
   const timestamp = nowIso();
@@ -80,7 +81,7 @@ export async function changePassword(request: Request, env: Env): Promise<Respon
   const auth = await requireAuth(request, env);
   const body = await readJson(request, changePasswordBodySchema, locale);
   if (!(await verifyPassword(body.currentPassword, auth.user.password_hash))) {
-    throw new HttpError(400, tr(locale, "当前密码不正确", "Current password is incorrect"));
+    throw new HttpError(400, serverText(locale, "auth.currentPasswordIncorrect"));
   }
   const timestamp = nowIso();
   const passwordHash = await hashPassword(body.newPassword);
@@ -132,7 +133,7 @@ export async function adminPatchUser(request: Request, env: Env, userId: string)
   const locale = requestLocale(request);
   const auth = await requireAdmin(request, env);
   const user = await findUserById(env, userId);
-  if (!user) throw new HttpError(404, tr(locale, "用户不存在", "User not found"));
+  if (!user) throw new HttpError(404, serverText(locale, "auth.userNotFound"));
   const body = await readJson(request, adminPatchUserBodySchema, locale);
   const nextRole = body.role ?? user.role;
   const nextBanned = typeof body.banned === "boolean" ? body.banned : user.banned === 1;
@@ -144,7 +145,7 @@ export async function adminPatchUser(request: Request, env: Env, userId: string)
   `).bind(
     nextRole,
     nextBanned ? 1 : 0,
-    nextBanned ? tr(locale, "管理员禁用", "Disabled by administrator") : "",
+    nextBanned ? serverText(locale, "auth.adminDisabledReason") : "",
     passwordHash,
     timestamp,
     user.id,
@@ -165,8 +166,8 @@ export async function adminDeleteUser(request: Request, env: Env, userId: string
   const locale = requestLocale(request);
   const auth = await requireAdmin(request, env);
   const user = await findUserById(env, userId);
-  if (!user) throw new HttpError(404, tr(locale, "用户不存在", "User not found"));
-  if (user.id === auth.user.id) throw new HttpError(400, tr(locale, "不能删除当前登录的管理员", "You cannot delete the current administrator"));
+  if (!user) throw new HttpError(404, serverText(locale, "auth.userNotFound"));
+  if (user.id === auth.user.id) throw new HttpError(400, serverText(locale, "auth.cannotDeleteCurrentAdmin"));
   await assertNotLastAdminMutation(env, locale, auth.user.id, user, "user", true);
   // D1 外键级联负责清 session/settings/subscriptions/assets metadata；R2 对象仍只能通过失效 metadata 变成不可读孤儿。
   await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(user.id).run();
@@ -176,7 +177,7 @@ export async function adminDeleteUser(request: Request, env: Env, userId: string
 export async function requireAuth(request: Request, env: Env): Promise<AuthContext> {
   const locale = requestLocale(request);
   const token = bearerToken(request);
-  if (!token) throw new HttpError(401, tr(locale, "请先登录", "Please sign in first"));
+  if (!token) throw new HttpError(401, serverText(locale, "auth.loginRequired"));
   // session 与 user 联查是认证边界：过期、被禁用、用户被删都会在同一次检查里失效。
   const tokenHash = await sha256(token);
   const row = await env.DB.prepare(`
@@ -187,7 +188,7 @@ export async function requireAuth(request: Request, env: Env): Promise<AuthConte
     WHERE sessions.token_hash = ? AND sessions.expires_at > ?
     LIMIT 1
   `).bind(tokenHash, nowIso()).first<SessionAuthRow>();
-  if (!row || row.banned === 1) throw new HttpError(401, tr(locale, "登录已失效", "Session has expired"));
+  if (!row || row.banned === 1) throw new HttpError(401, serverText(locale, "auth.sessionExpired"));
   const user = rowToUser(row);
   const session = {
     id: row.session_id,
@@ -204,7 +205,7 @@ export async function requireAuth(request: Request, env: Env): Promise<AuthConte
 export async function requireAdmin(request: Request, env: Env): Promise<AuthContext> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
-  if (auth.user.role !== "admin") throw new HttpError(403, tr(locale, "需要管理员权限", "Administrator permission required"));
+  if (auth.user.role !== "admin") throw new HttpError(403, serverText(locale, "auth.adminRequired"));
   return auth;
 }
 
@@ -242,10 +243,10 @@ async function assertNotLastAdminMutation(
   const removesEnabledAdmin = target.role === "admin" && target.banned === 0 && (nextRole !== "admin" || nextBanned);
   // 防自锁分两层：当前管理员不能移除自己，最后一个启用管理员也不能被移除。
   if (target.id === currentUserId && removesEnabledAdmin) {
-    throw new HttpError(400, tr(locale, "不能禁用或降级当前登录的管理员", "You cannot disable or demote the current administrator"));
+    throw new HttpError(400, serverText(locale, "auth.cannotDisableOrDemoteCurrentAdmin"));
   }
   if (removesEnabledAdmin && await enabledAdminCount(env) <= 1) {
-    throw new HttpError(400, tr(locale, "至少需要保留一个启用的管理员", "At least one enabled administrator is required"));
+    throw new HttpError(400, serverText(locale, "auth.atLeastOneEnabledAdmin"));
   }
 }
 

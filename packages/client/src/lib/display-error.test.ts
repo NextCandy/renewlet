@@ -19,6 +19,11 @@ describe("display-error", () => {
     expect(getDisplayErrorMessage({ response: { message: "CUSTOM_CONFIG_ITEM_INVALID:categories:CONFIG_ITEM_LABELS_REQUIRED" } })).toBe("配置项必须同时填写中文名和英文名");
   });
 
+  it("prefers stable backend codes over localized server messages", () => {
+    expect(getDisplayErrorMessage(new ApiError("Request body is too large", 413, undefined, "BODY_TOO_LARGE"))).toBe("请求体过大");
+    expect(getDisplayErrorMessage({ response: { code: "BODY_TOO_LARGE", message: "Request body is too large" } })).toBe("请求体过大");
+  });
+
   it("keeps login failures generic for auth client plain objects", () => {
     expect(getAuthDisplayMessage({
       code: "INVALID_EMAIL_OR_PASSWORD",

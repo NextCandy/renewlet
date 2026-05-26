@@ -1,6 +1,7 @@
 import { subscriptionCreateBodySchema, subscriptionUpdateBodySchema } from "@renewlet/shared/schemas/subscriptions";
 import { boolToInt, getSubscription, listSubscriptions, newId, nowIso, parseJsonObject, toApiSubscription } from "./db";
-import { HttpError, json, ok, readJson, requestLocale, tr } from "./http";
+import { HttpError, json, ok, readJson, requestLocale } from "./http";
+import { serverText } from "./server-i18n";
 import { requireAuth } from "./auth";
 import type { Env, SubscriptionRow } from "./types";
 
@@ -19,7 +20,7 @@ export async function createSubscription(request: Request, env: Env): Promise<Re
   await env.DB.prepare(`
     INSERT INTO subscriptions (
       id, user_id, name, logo, price, currency, billing_cycle, custom_days, category, status, payment_method,
-      start_date, next_billing_date, auto_calculate_next_billing_date, trial_end_date, website, notes, tags_json,
+      start_date, next_billing_date, auto_calculate_next_billing_dateial_end_date, website, notes, tags_json,
       reminder_days, repeat_reminder_enabled, repeat_reminder_interval, repeat_reminder_window, extra_json, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(...subscriptionRowValues(row)).run();
@@ -30,7 +31,7 @@ export async function updateSubscription(request: Request, env: Env, id: string)
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
   const existing = await getSubscription(env, auth.user.id, id);
-  if (!existing) throw new HttpError(404, tr(locale, "订阅不存在", "Subscription not found"));
+  if (!existing) throw new HttpError(404, serverText(locale, "subscription.notFound"));
   const patch = await readJson(request, subscriptionUpdateBodySchema, locale);
   const timestamp = nowIso();
   // Worker 没有 PocketBase hook 可二次归一；更新必须先回 API body，再合并 patch 走同一套 create schema。
@@ -76,7 +77,7 @@ export async function deleteSubscription(request: Request, env: Env, id: string)
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
   const result = await env.DB.prepare("DELETE FROM subscriptions WHERE user_id = ? AND id = ?").bind(auth.user.id, id).run();
-  if ((result.meta.changes ?? 0) === 0) throw new HttpError(404, tr(locale, "订阅不存在", "Subscription not found"));
+  if ((result.meta.changes ?? 0) === 0) throw new HttpError(404, serverText(locale, "subscription.notFound"));
   return ok();
 }
 

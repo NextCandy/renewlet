@@ -1,6 +1,7 @@
 import { uploadKindSchema } from "@renewlet/shared/schemas/media";
 import { getAsset, listAssets, newId, nowIso } from "./db";
-import { HttpError, json, requestLocale, tr } from "./http";
+import { HttpError, json, requestLocale } from "./http";
+import { serverText } from "./server-i18n";
 import { requireAuth } from "./auth";
 import type { AssetRow, Env } from "./types";
 
@@ -13,13 +14,13 @@ export async function uploadAsset(request: Request, env: Env): Promise<Response>
   const form = await request.formData();
   const kind = uploadKindSchema.parse(form.get("kind"));
   const file = form.get("file");
-  if (!(file instanceof File)) throw new HttpError(400, tr(locale, "请选择要上传的图片", "Choose an image to upload"));
+  if (!(file instanceof File)) throw new HttpError(400, serverText(locale, "asset.uploadChooseImage"));
   if (file.size <= 0 || file.size > MAX_ASSET_BYTES) {
-    throw new HttpError(400, tr(locale, "图片大小无效", "Invalid image size"));
+    throw new HttpError(400, serverText(locale, "asset.invalidImageSize"));
   }
   const contentType = normalizeContentType(file.type, file.name);
   if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
-    throw new HttpError(400, tr(locale, "图片类型无效", "Invalid image type"));
+    throw new HttpError(400, serverText(locale, "asset.invalidImageType"));
   }
 
   // R2 key 带 userId，不靠文件名隔离；D1 元数据仍是权限判断的真相来源。
@@ -44,9 +45,9 @@ export async function readAsset(request: Request, env: Env, id: string): Promise
   const auth = await requireAuth(request, env);
   // 先按 owner 查 D1，再取 R2；不能让可猜测的 R2 key 绕过私有资产语义。
   const row = await getAsset(env, auth.user.id, id);
-  if (!row) throw new HttpError(404, tr(locale, "资产不存在", "Asset not found"));
+  if (!row) throw new HttpError(404, serverText(locale, "asset.missing"));
   const object = await env.ASSETS_BUCKET.get(row.r2_key);
-  if (!object) throw new HttpError(404, tr(locale, "资产文件不存在", "Asset file not found"));
+  if (!object) throw new HttpError(404, serverText(locale, "asset.fileMissing"));
 
   const contentType = row.mime_type || object.httpMetadata?.contentType || "application/octet-stream";
   const headers = new Headers();

@@ -37,21 +37,21 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 	router.POST("/api/app/setup", func(e *core.RequestEvent) error {
 		locale := requestLocale(e.Request)
 		if !envBool("SETUP_ENABLED", true) {
-			return e.ForbiddenError(tr(locale, "初始化已关闭", "Setup is disabled"), nil)
+			return e.ForbiddenError(serverText(locale, "auth.setupDisabled"), nil)
 		}
 		if hasEnabledAdmin(app) {
-			return e.ForbiddenError(tr(locale, "系统已初始化", "System has already been initialized"), nil)
+			return e.ForbiddenError(serverText(locale, "auth.setupAlreadyInitialized"), nil)
 		}
 		// setup 是认证前入口，必须用严格 decoder 拒绝未知字段和多余 token。
 		body, err := decodeStrictJSON[setupCreateRequest](e.Request, locale)
 		if err != nil {
-			return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 		}
 		if err := createInitialAdmin(app, body.Name, body.Email, body.Password); err != nil {
 			if errors.Is(err, errSetupAlreadyInitialized) {
-				return e.ForbiddenError(tr(locale, "系统已初始化", "System has already been initialized"), nil)
+				return e.ForbiddenError(serverText(locale, "auth.setupAlreadyInitialized"), nil)
 			}
-			return e.BadRequestError(tr(locale, "管理员创建失败", "Failed to create admin"), err)
+			return e.BadRequestError(serverText(locale, "admin.createFailed"), err)
 		}
 		return e.JSON(http.StatusCreated, newOKResponse())
 	})
@@ -61,7 +61,7 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		locale := requestLocale(e.Request)
 		users, err := app.FindAllRecords("users")
 		if err != nil {
-			return e.InternalServerError(tr(locale, "加载用户失败", "Failed to load users"), err)
+			return e.InternalServerError(serverText(locale, "admin.loadUsersFailed"), err)
 		}
 		sort.Slice(users, func(i, j int) bool {
 			return users[i].GetDateTime("created").Time().After(users[j].GetDateTime("created").Time())
@@ -76,12 +76,12 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		locale := requestLocale(e.Request)
 		body, err := decodeStrictJSON[adminCreateUserRequest](e.Request, locale)
 		if err != nil {
-			return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 		}
 		role := normalizeRole(body.Role)
 		user, err := createUser(app, body.Name, body.Email, body.Password, role)
 		if err != nil {
-			return e.BadRequestError(tr(locale, "用户创建失败", "Failed to create user"), err)
+			return e.BadRequestError(serverText(locale, "admin.createUserFailed"), err)
 		}
 		return e.JSON(http.StatusCreated, adminUserResponse{User: toUserDTO(user)})
 	})
@@ -90,11 +90,11 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		id := e.Request.PathValue("id")
 		user, err := app.FindRecordById("users", id)
 		if err != nil {
-			return e.NotFoundError(tr(locale, "用户不存在", "User not found"), err)
+			return e.NotFoundError(serverText(locale, "auth.userNotFound"), err)
 		}
 		body, err := decodeStrictJSON[adminPatchUserRequest](e.Request, locale)
 		if err != nil {
-			return e.BadRequestError(validationErrorMessage(locale, "请求参数无效", "Invalid request parameters", err), err)
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestParameters", err), err)
 		}
 		if body.Role != nil {
 			user.Set("role", normalizeRole(*body.Role))
@@ -102,7 +102,7 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		if body.Banned != nil {
 			user.Set("banned", *body.Banned)
 			if *body.Banned {
-				user.Set("banReason", localizedDisabledBanReason(locale))
+				user.Set("banReason", serverText(locale, "auth.accountDisabledByAdmin"))
 			} else {
 				user.Set("banReason", "")
 			}
@@ -115,7 +115,7 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 			return e.BadRequestError(localizeAdminMutationError(locale, err), nil)
 		}
 		if err := app.Save(user); err != nil {
-			return e.BadRequestError(tr(locale, "用户更新失败", "Failed to update user"), err)
+			return e.BadRequestError(serverText(locale, "admin.updateUserFailed"), err)
 		}
 		return e.JSON(http.StatusOK, newOKResponse())
 	})
@@ -124,13 +124,13 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		id := e.Request.PathValue("id")
 		user, err := app.FindRecordById("users", id)
 		if err != nil {
-			return e.NotFoundError(tr(locale, "用户不存在", "User not found"), err)
+			return e.NotFoundError(serverText(locale, "auth.userNotFound"), err)
 		}
 		if err := preventUserDelete(app, e.Auth, user); err != nil {
 			return e.BadRequestError(localizeAdminMutationError(locale, err), nil)
 		}
 		if err := app.Delete(user); err != nil {
-			return e.BadRequestError(tr(locale, "用户删除失败", "Failed to delete user"), err)
+			return e.BadRequestError(serverText(locale, "admin.deleteUserFailed"), err)
 		}
 		return e.JSON(http.StatusOK, newOKResponse())
 	})
@@ -139,14 +139,14 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		force := e.Request.URL.Query().Get("force") == "true"
 		info, err := defaultSystemUpdateService.CheckVersion(e.Request.Context(), locale, force)
 		if err != nil {
-			return e.InternalServerError(tr(locale, "检查版本失败", "Failed to check version"), err)
+			return e.InternalServerError(serverText(locale, "system.checkVersionFailed"), err)
 		}
 		return e.JSON(http.StatusOK, info)
 	})
 	admin.POST("/system/update", func(e *core.RequestEvent) error {
 		locale := requestLocale(e.Request)
 		if _, err := decodeStrictJSON[systemUpdateRequest](e.Request, locale); err != nil {
-			return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 		}
 		result, err := defaultSystemUpdateService.PerformUpdate(e.Request.Context(), locale)
 		if err != nil {
@@ -156,7 +156,7 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 			case errors.Is(err, errSystemUpdateUnsupported), errors.Is(err, errSystemUpdateNoUpdate):
 				return e.BadRequestError(err.Error(), nil)
 			default:
-				return e.InternalServerError(tr(locale, "系统更新失败", "System update failed"), err)
+				return e.InternalServerError(serverText(locale, "system.updateFailed"), err)
 			}
 		}
 		if err := e.JSON(http.StatusOK, result); err != nil {
@@ -171,14 +171,14 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		locale := requestLocale(e.Request)
 		body, err := decodeStrictJSON[accountPasswordRequest](e.Request, locale)
 		if err != nil {
-			return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 		}
 		if !e.Auth.ValidatePassword(body.CurrentPassword) {
-			return e.BadRequestError(tr(locale, "当前密码不正确", "Current password is incorrect"), nil)
+			return e.BadRequestError(serverText(locale, "auth.currentPasswordIncorrect"), nil)
 		}
 		e.Auth.SetPassword(body.NewPassword)
 		if err := app.Save(e.Auth); err != nil {
-			return e.BadRequestError(tr(locale, "密码更新失败", "Failed to update password"), err)
+			return e.BadRequestError(serverText(locale, "auth.passwordUpdateFailed"), err)
 		}
 		return e.JSON(http.StatusOK, newOKResponse())
 	})

@@ -1,7 +1,8 @@
 import { systemVersionResponseSchema } from "@renewlet/shared/schemas/app";
 import packageJson from "../package.json";
 import { requireAdmin } from "./auth";
-import { HttpError, json, requestLocale, tr } from "./http";
+import { HttpError, json, requestLocale } from "./http";
+import { serverText } from "./server-i18n";
 import type { Env } from "./types";
 
 const PACKAGE_VERSION = packageJson.version;
@@ -17,7 +18,7 @@ export async function systemVersion(request: Request, env: Env): Promise<Respons
     hasUpdate: false,
     runtime: "cloudflare",
     updateSupported: false,
-    unsupportedReason: tr(locale, "Cloudflare 部署不支持页面内一键更新，请在 GitHub Release 或 Cloudflare 部署流程中升级。", "Cloudflare deployments do not support in-app updates. Upgrade from GitHub Releases or the Cloudflare deployment workflow."),
+    unsupportedReason: serverText(locale, "system.cloudflareVersionUnsupportedReason"),
     releaseInfo: {
       tagName: `v${version}`,
       version,
@@ -40,7 +41,7 @@ export async function systemVersion(request: Request, env: Env): Promise<Respons
 export async function systemUpdate(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env);
   const locale = requestLocale(request);
-  throw new HttpError(400, tr(locale, "Cloudflare 部署不支持页面内一键更新", "Cloudflare deployments do not support in-app updates"), "SYSTEM_UPDATE_UNSUPPORTED");
+  throw new HttpError(400, serverText(locale, "system.cloudflareUpdateUnsupported"), "SYSTEM_UPDATE_UNSUPPORTED");
 }
 
 function cloudflareBuildValue(value: string | undefined, fallback: string): string {

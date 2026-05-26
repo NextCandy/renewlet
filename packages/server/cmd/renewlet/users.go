@@ -32,7 +32,7 @@ var errSetupAlreadyInitialized = errors.New("SETUP_ALREADY_INITIALIZED")
 // 注意： 前端禁用按钮只是体验优化；所有管理员写操作都必须经过这里和后续防自锁校验。
 func requireAdmin(e *core.RequestEvent) error {
 	if e.Auth == nil || e.Auth.GetString("role") != "admin" || e.Auth.GetBool("banned") {
-		return e.ForbiddenError(tr(requestLocale(e.Request), "需要管理员权限", "Admin permission is required"), nil)
+		return e.ForbiddenError(serverText(requestLocale(e.Request), "auth.adminRequiredShort"), nil)
 	}
 	return e.Next()
 }
@@ -164,11 +164,11 @@ func localizeAdminMutationError(locale appLocale, err error) string {
 	}
 	switch err.Error() {
 	case "CURRENT_ACCOUNT_PROTECTED":
-		return tr(locale, "不能禁用或降级当前登录账号", "You cannot disable or demote the current signed-in account")
+		return serverText(locale, "auth.cannotDisableOrDemoteCurrentSignedIn")
 	case "LAST_ADMIN_PROTECTED":
-		return tr(locale, "至少需要保留一个启用的管理员", "At least one enabled admin must remain")
+		return serverText(locale, "auth.atLeastOneEnabledAdminShort")
 	case "CURRENT_ACCOUNT_DELETE_PROTECTED":
-		return tr(locale, "不能删除当前登录账号", "You cannot delete the current signed-in account")
+		return serverText(locale, "auth.cannotDeleteCurrentSignedIn")
 	default:
 		return err.Error()
 	}

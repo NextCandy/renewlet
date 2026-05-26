@@ -9,17 +9,17 @@ import (
 func mediaCandidates(e *core.RequestEvent) error {
 	locale := requestLocale(e.Request)
 	if e.Auth == nil {
-		return e.UnauthorizedError(tr(locale, "请先登录", "Please sign in first"), nil)
+		return e.UnauthorizedError(serverText(locale, "auth.loginRequired"), nil)
 	}
 	body, err := decodeStrictJSON[mediaCandidateResolveRequest](e.Request, locale)
 	if err != nil {
-		return e.BadRequestError(validationErrorMessage(locale, "请求体无效", "Invalid request body", err), err)
+		return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 	}
 	if retryAfter := checkMediaCandidateRateLimit(e); retryAfter > 0 {
 		setRetryAfter(e, retryAfter)
 		return e.JSON(http.StatusTooManyRequests, rateLimitedResponse{
 			Code:    "RATE_LIMITED",
-			Message: tr(locale, "请求过于频繁，请稍后再试", "Too many requests. Please try again later"),
+			Message: serverText(locale, "rateLimit.tooManyRequests"),
 		})
 	}
 
@@ -30,7 +30,7 @@ func mediaCandidates(e *core.RequestEvent) error {
 	limit = clampInt(limit, 1, mediaResolverCfg.Limits.MaxCandidates)
 	settings, err := currentUserSettings(e.App, e.Auth, nil)
 	if err != nil {
-		return e.BadRequestError(validationErrorMessage(locale, "设置无效", "Invalid settings", err), err)
+		return e.BadRequestError(validationErrorMessage(locale, "notification.settingsInvalid", err), err)
 	}
 
 	items := make([]mediaCandidateResolveItemResponse, 0, len(body.Items))

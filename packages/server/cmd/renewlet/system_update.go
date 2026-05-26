@@ -38,7 +38,7 @@ func (service *systemUpdateService) CheckVersion(ctx context.Context, locale app
 	if err != nil {
 		if cached := service.cachedVersion(); cached != nil {
 			// 版本检查是管理页体验能力，不应因 GitHub 短暂失败阻断管理员查看上次可信结果。
-			cached.Warning = tr(locale, "版本检查暂时失败，正在展示缓存结果："+err.Error(), "Version check failed; showing cached result: "+err.Error())
+			cached.Warning = serverFormat(locale, "system.versionCheckCacheWarning", map[string]interface{}{"error": err.Error()})
 			return cached, nil
 		}
 		response.Warning = err.Error()
@@ -54,7 +54,7 @@ func (service *systemUpdateService) CheckVersion(ctx context.Context, locale app
 
 func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale appLocale) (*systemUpdateResponse, error) {
 	if !service.beginUpdate() {
-		return nil, systemUpdateError{kind: errSystemUpdateInProgress, message: tr(locale, "已有系统更新正在执行", "A system update is already running")}
+		return nil, systemUpdateError{kind: errSystemUpdateInProgress, message: serverText(locale, "system.updateInProgress")}
 	}
 	defer service.endUpdate()
 
@@ -67,7 +67,7 @@ func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale ap
 		return nil, err
 	}
 	if !isNewerSystemVersion(Version, release.dto.Version) {
-		return nil, systemUpdateError{kind: errSystemUpdateNoUpdate, message: tr(locale, "当前已经是最新版本", "Renewlet is already up to date")}
+		return nil, systemUpdateError{kind: errSystemUpdateNoUpdate, message: serverText(locale, "system.alreadyLatest")}
 	}
 
 	archiveAsset, checksumAsset, err := selectSystemUpdateAssets(release.assets, release.dto.Version)
@@ -118,7 +118,7 @@ func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale ap
 		CurrentVersion: Version,
 		TargetVersion:  release.dto.Version,
 		NeedsRestart:   true,
-		Message:        tr(locale, "更新已完成，Renewlet 将自动重启。", "Update completed. Renewlet will restart automatically."),
+		Message:        serverText(locale, "system.updateCompleted"),
 	}, nil
 }
 
@@ -232,7 +232,7 @@ func selfUpdateCapability(locale appLocale) systemUpdateCapability {
 		return systemUpdateCapability{
 			runtime:           "source",
 			supported:         false,
-			unsupportedReason: tr(locale, "当前部署不支持页面内一键更新，请使用原部署方式手动升级。", "This deployment does not support in-app updates. Upgrade it with the original deployment method."),
+			unsupportedReason: serverText(locale, "system.updateUnsupportedRuntime"),
 			binaryPath:        binaryPath,
 			backupDir:         backupDir,
 		}
@@ -241,7 +241,7 @@ func selfUpdateCapability(locale appLocale) systemUpdateCapability {
 		return systemUpdateCapability{
 			runtime:           "docker",
 			supported:         false,
-			unsupportedReason: tr(locale, "页面内一键更新只支持 Linux Docker 镜像。", "In-app updates are only supported for the Linux Docker image."),
+			unsupportedReason: serverText(locale, "system.updateUnsupportedLinuxDocker"),
 			binaryPath:        binaryPath,
 			backupDir:         backupDir,
 		}
@@ -251,7 +251,7 @@ func selfUpdateCapability(locale appLocale) systemUpdateCapability {
 		return systemUpdateCapability{
 			runtime:           "docker",
 			supported:         false,
-			unsupportedReason: tr(locale, "未找到可替换的 Docker 运行二进制，请先用 docker compose pull && docker compose up -d 升级一次。", "The Docker self-update binary was not found. Run docker compose pull && docker compose up -d once first."),
+			unsupportedReason: serverText(locale, "system.updateUnsupportedDockerBridge"),
 			binaryPath:        binaryPath,
 			backupDir:         backupDir,
 		}
@@ -260,7 +260,7 @@ func selfUpdateCapability(locale appLocale) systemUpdateCapability {
 		return systemUpdateCapability{
 			runtime:           "docker",
 			supported:         false,
-			unsupportedReason: tr(locale, "当前不是 Release 构建，请使用源码或镜像方式升级。", "This is not a release build. Upgrade it from source or Docker image instead."),
+			unsupportedReason: serverText(locale, "system.updateUnsupportedNotRelease"),
 			binaryPath:        binaryPath,
 			backupDir:         backupDir,
 		}

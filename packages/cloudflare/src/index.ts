@@ -19,7 +19,8 @@ import { applyImport, previewImport } from "./import-export";
 import { mediaCandidates } from "./search";
 import { notificationHistory, notificationRun, notificationTest, runScheduledNotifications } from "./notifications";
 import { systemUpdate, systemVersion } from "./system";
-import { errorResponse, methodNotAllowed, pathSegments, toResponse } from "./http";
+import { errorResponse, methodNotAllowed, pathSegments, requestLocale, toResponse } from "./http";
+import { serverText } from "./server-i18n";
 import type { Env } from "./types";
 
 const worker: ExportedHandler<Env> = {
@@ -41,15 +42,16 @@ export default worker;
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  const locale = requestLocale(request);
   // wrangler assets 只把 /api/* 交给 Worker；这里再次拒绝非 API，避免静态资源请求误进产品 API。
-  if (!url.pathname.startsWith("/api/")) return errorResponse(404, "Not found", "NOT_FOUND");
+  if (!url.pathname.startsWith("/api/")) return errorResponse(404, serverText(locale, "common.notFound"), "NOT_FOUND");
   if (url.pathname === "/api/app/health") return health();
   if (url.pathname === "/api/app/setup") return routeMethods(request, {
     GET: () => setupStatus(request, env),
     POST: () => createInitialAdmin(request, env),
   });
   if (url.pathname.startsWith("/api/app/")) return routeApp(request, env, url);
-  return errorResponse(404, "Not found", "NOT_FOUND");
+  return errorResponse(404, serverText(locale, "common.notFound"), "NOT_FOUND");
 }
 
 async function routeApp(request: Request, env: Env, url: URL): Promise<Response> {
@@ -118,12 +120,12 @@ async function routeApp(request: Request, env: Env, url: URL): Promise<Response>
 
   if (head === "media" && second === "candidates") return routeMethods(request, { POST: () => mediaCandidates(request, env) });
 
-  return errorResponse(404, "Not found", "NOT_FOUND");
+  return errorResponse(404, serverText(requestLocale(request), "common.notFound"), "NOT_FOUND");
 }
 
 async function routeMethods(request: Request, handlers: Partial<Record<string, () => Promise<Response> | Response>>): Promise<Response> {
   const handler = handlers[request.method];
-  return handler ? await handler() : methodNotAllowed();
+  return handler ? await handler() : methodNotAllowed(requestLocale(request));
 }
 
 function health(): Response {
