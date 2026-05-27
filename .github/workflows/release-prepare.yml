@@ -1,6 +1,6 @@
 name: Release Prepare
 
-# 从 dev 拉出 release/vX.Y.Z 并同步版本号；这一步只准备 PR，不打 tag、不发布产物。
+# 从 dev 拉出 release/vX.Y.Z 并同步版本号；这一步只准备候选分支，不开 main PR、不打 tag、不发布产物。
 on:
   workflow_dispatch:
     inputs:
@@ -72,52 +72,25 @@ jobs:
       - name: Sync workspace package versions
         run: node scripts/release.mjs sync-version "${{ inputs.version }}"
 
-      - name: Create or update release pull request
+      - name: Create or update release branch
         env:
-          GH_TOKEN: ${{ steps.release-bot.outputs.token }}
+          RELEASE_BOT_TOKEN: ${{ steps.release-bot.outputs.token }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
           RELEASE_BRANCH="release/v${VERSION}"
-          PR_TITLE="release: v${VERSION}"
-          BODY_FILE="$(mktemp)"
-
-          cat > "$BODY_FILE" <<EOF
-          ## Release v${VERSION}
-
-          This PR promotes the release branch to \`main\` after RC validation.
-
-          Checklist:
-          - [ ] CI is green on \`${RELEASE_BRANCH}\`
-          - [ ] \`v${VERSION}-rc.1\` has been tested
-          - [ ] Docker deployment package has been checked
-          - [ ] Cloudflare release build has passed
-          EOF
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://x-access-token:${RELEASE_BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           if ! git diff --quiet; then
             git add package.json packages/*/package.json
             git commit -m "chore: prepare release v${VERSION}"
           fi
 
-          # release PR 的核心差异是 dev 到 main 的提交历史；即使版本文件没有变化，也必须切分支并建 PR。
+          # RC 验证前只推进 release 分支；main PR 由 Release Promote 在候选版通过后创建。
           git fetch origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" || true
           git push --force-with-lease origin "HEAD:${RELEASE_BRANCH}"
-
-          PR_URL="$(gh pr list --base main --head "${RELEASE_BRANCH}" --state open --json url --jq '.[0].url // ""')"
-          if [[ -n "$PR_URL" ]]; then
-            gh pr edit "$PR_URL" --title "$PR_TITLE" --body-file "$BODY_FILE"
-          else
-            PR_URL="$(gh pr create --base main --head "${RELEASE_BRANCH}" --title "$PR_TITLE" --body-file "$BODY_FILE")"
-          fi
-
-          if [[ -z "$PR_URL" ]]; then
-            echo "Release pull request was not created or found." >&2
-            exit 1
-          fi
-
-          echo "Release pull request: ${PR_URL}"
+          echo "Release branch ready: ${RELEASE_BRANCH}"

@@ -13,7 +13,7 @@ PR 标题和 commit 使用 Conventional Commits。示例：`feat: add notificati
 
 ## Release Bot GitHub App
 
-`Release Prepare` 使用专门的 GitHub App token，不使用默认 `GITHUB_TOKEN` 创建 PR。这个做法和 n8n、Immich 这类成熟发布流程一致，可以避开仓库级 `GITHUB_TOKEN` 创建 PR 和触发后续 CI 的权限限制。
+发布 workflow 使用专门的 GitHub App token，不使用默认 `GITHUB_TOKEN` 创建 PR 或推发布 tag。这个做法和 n8n、Immich 这类成熟发布流程一致，可以避开仓库级 `GITHUB_TOKEN` 创建 PR 和触发后续 CI 的权限限制。
 
 创建名为 `renewlet-release-bot` 的 GitHub App，关闭 webhook，只安装到 `zhiyingzzhou/renewlet` 仓库。给 App 授予以下 repository 权限：
 
@@ -21,34 +21,44 @@ PR 标题和 commit 使用 Conventional Commits。示例：`feat: add notificati
 - Pull requests：read and write
 - Workflows：read and write
 
-运行 `Release Prepare` 前，在仓库里配置：
+运行发布 workflow 前，在仓库里配置：
 
 - Variable `RENEWLET_RELEASE_APP_CLIENT_ID`：GitHub App 的 Client ID。
 - Secret `RENEWLET_RELEASE_APP_PRIVATE_KEY`：App 生成的完整 private key PEM。
 
-任一配置缺失时，workflow 会在开头直接失败并提示配置项。已经存在的 `release/vX.Y.Z` 分支不用删除；release bot 会更新分支，并创建或更新对应 PR。
+任一配置缺失时，发布 workflow 会在开头直接失败并提示配置项。已经存在的 `release/vX.Y.Z` 分支不用删除；release bot 会更新分支，并在 RC 验证通过后创建或更新对应 PR。
 
 ## 准备发布
 
 1. 确认 `dev` 的 CI 通过。
 2. 运行 `Release Prepare` workflow。
 3. 输入稳定版 SemVer，例如 `0.1.0`。
-4. workflow 会同步 package 版本，并创建指向 `main` 的 `release/v0.1.0` PR。
+4. workflow 会同步 package 版本，并推送 `release/v0.1.0`。
 5. 编辑 `CHANGELOG.md` 中对应版本的短 release notes。内容保持面向用户、简短可读；GitHub Release 会单独附完整 commit 历史链接。
 6. 发布期只在 `release/v0.1.0` 上做 release 修复。
+7. 这一步不要创建 `main` PR；先发布并验证至少一个 RC。
 
 ## 发布候选版
 
 1. 运行 `Release Candidate` workflow。
 2. 输入稳定版版本号，例如 `0.1.0`。
 3. 输入 RC 编号，例如 `1`。
-4. workflow 会创建 `v0.1.0-rc.1` tag。
-5. `Release Publish` 会构建并推送：
+4. workflow 会用 release bot token 创建 `v0.1.0-rc.1` tag。
+5. GitHub 只有在 tag 由 release bot token 推送时，才会启动 tag 驱动的 `Release Publish` workflow。默认 `GITHUB_TOKEN` 创建的 tag 不会触发后续 workflow。
+6. `Release Publish` 会构建并推送：
    - `zhiyingzzhou/renewlet:0.1.0-rc.1`
    - `zhiyingzzhou/renewlet:rc`
    - `ghcr.io/zhiyingzzhou/renewlet:0.1.0-rc.1`
    - `ghcr.io/zhiyingzzhou/renewlet:rc`
-6. RC 是 GitHub prerelease，永远不会更新 `latest`，也不会部署 Cloudflare 生产环境。
+7. RC 是 GitHub prerelease，永远不会更新 `latest`，也不会部署 Cloudflare 生产环境。
+
+## 验证并 Promote
+
+1. 测试 RC Docker 镜像、GitHub prerelease 附件和 Cloudflare release build 输出。
+2. 如果 RC 验证失败，继续修 `release/v0.1.0`，然后发布下一个 RC，例如 `v0.1.0-rc.2`。
+3. RC 验证通过后，运行 `Release Promote` workflow。
+4. 输入稳定版版本号，例如 `0.1.0`，以及已验证的 RC 编号，例如 `1`。
+5. workflow 会检查 `v0.1.0-rc.1` 是否存在，然后创建或更新指向 `main` 的 `release/v0.1.0` PR。
 
 ## Cloudflare 测试部署
 
@@ -56,9 +66,8 @@ Cloudflare 测试部署使用 `.github/workflows/cloudflare-worker.yml`。它会
 
 ## 发布稳定版
 
-1. 用 Docker 和 Cloudflare build 检查验证 RC。
-2. 把 release PR 合入 `main`。
-3. 从 `main` 创建并推送稳定版 annotated tag：
+1. 把 promote 后的 release PR 合入 `main`。
+2. 从 `main` 创建并推送稳定版 annotated tag：
 
 ```bash
 git checkout main
@@ -67,16 +76,16 @@ git tag -a v0.1.0 -m "Renewlet v0.1.0"
 git push origin v0.1.0
 ```
 
-4. `Release Publish` 会构建 Docker 镜像、创建 draft GitHub Release，并附加 `renewlet-docker-v0.1.0.zip`、`renewlet_0.1.0_linux_amd64.tar.gz`、`renewlet_0.1.0_linux_arm64.tar.gz` 和 `checksums.txt`。
-5. 稳定版推送：
+3. `Release Publish` 会构建 Docker 镜像、创建 draft GitHub Release，并附加 `renewlet-docker-v0.1.0.zip`、`renewlet_0.1.0_linux_amd64.tar.gz`、`renewlet_0.1.0_linux_arm64.tar.gz` 和 `checksums.txt`。
+4. 稳定版推送：
    - `zhiyingzzhou/renewlet:0.1.0`
    - `zhiyingzzhou/renewlet:0.1`
    - `zhiyingzzhou/renewlet:latest`
    - `ghcr.io/zhiyingzzhou/renewlet:0.1.0`
    - `ghcr.io/zhiyingzzhou/renewlet:0.1`
    - `ghcr.io/zhiyingzzhou/renewlet:latest`
-6. 检查 draft Release 的镜像列表和短 changelog 后，手动发布 Release。
-7. 如果本次稳定版需要部署 Cloudflare 生产 Worker，审批 `production-cloudflare` environment。稳定版发布使用 `.github/workflows/cloudflare-production.yml`，不使用测试部署 workflow。
+5. 检查 draft Release 的镜像列表和短 changelog 后，手动发布 Release。
+6. 如果本次稳定版需要部署 Cloudflare 生产 Worker，审批 `production-cloudflare` environment。稳定版发布使用 `.github/workflows/cloudflare-production.yml`，不使用测试部署 workflow。
 
 ## Docker 页面内更新
 
