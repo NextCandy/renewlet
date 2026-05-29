@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { formatTimeZoneOffset } from "@/lib/time/time-zone";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/I18nProvider";
 import type {
@@ -55,8 +56,8 @@ type NotificationHistoryPanelProps = {
   refetch: () => void;
 };
 
-function formatSchedule(date: string, time: string, timeZone: string) {
-  return `${date} ${time} · ${timeZone}`;
+function formatSchedule(date: string, time: string, timeZone: string, scheduledInstantUtc: string) {
+  return `${date} ${time} (${formatTimeZoneOffset(timeZone, new Date(scheduledInstantUtc))})`;
 }
 
 function repeatIntervalHours(interval: string) {
@@ -125,7 +126,12 @@ function UpcomingBatchCard({ batch }: { batch: UpcomingNotificationBatch }) {
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <TruncatedTooltipText
           as="div"
-          text={formatSchedule(batch.scheduledLocalDate, batch.scheduledLocalTime, batch.timeZone)}
+          text={formatSchedule(
+            batch.scheduledLocalDate,
+            batch.scheduledLocalTime,
+            batch.timeZone,
+            batch.scheduledInstantUtc,
+          )}
           className="min-w-0 flex-1 text-sm font-medium text-foreground"
         />
         <Badge variant="outline" className="shrink-0 border-border text-muted-foreground">
@@ -212,7 +218,12 @@ function HistoryRow({ job, selected, onSelect }: { job: NotificationHistoryJob; 
       <div className="min-w-0">
         <TruncatedTooltipText
           as="div"
-          text={formatSchedule(job.scheduledLocalDate, job.scheduledLocalTime, job.timeZone)}
+          text={formatSchedule(
+            job.scheduledLocalDate,
+            job.scheduledLocalTime,
+            job.timeZone,
+            job.scheduledInstantUtc,
+          )}
           className="text-sm font-medium text-foreground"
         />
         <TruncatedTooltipText as="div" text={reason} className="mt-1 text-xs text-muted-foreground" />
@@ -290,7 +301,12 @@ function HistoryDetailDrawer({
                   <span className="min-w-0 truncate">{t("notification.historyDetailTitle")}</span>
                 </Drawer.Title>
                 <Drawer.Description className="mt-1 truncate text-left text-xs text-muted-foreground">
-                  {formatSchedule(job.scheduledLocalDate, job.scheduledLocalTime, job.timeZone)}
+                  {formatSchedule(
+                    job.scheduledLocalDate,
+                    job.scheduledLocalTime,
+                    job.timeZone,
+                    job.scheduledInstantUtc,
+                  )}
                 </Drawer.Description>
               </div>
               <Drawer.Close asChild>
@@ -382,7 +398,18 @@ export function NotificationHistoryPanel({
         <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-3">
           <SummaryValue
             label={t("notification.nextCheck")}
-            value={data ? formatSchedule(data.summary.nextCheck.scheduledLocalDate, data.summary.nextCheck.scheduledLocalTime, data.summary.nextCheck.timeZone) : isLoading ? t("common.loading") : t("common.unknown")}
+            value={
+              data
+                ? formatSchedule(
+                  data.summary.nextCheck.scheduledLocalDate,
+                  data.summary.nextCheck.scheduledLocalTime,
+                  data.summary.nextCheck.timeZone,
+                  data.summary.nextCheck.scheduledInstantUtc,
+                )
+                : isLoading
+                  ? t("common.loading")
+                  : t("common.unknown")
+            }
             muted={!data}
           />
           <SummaryValue

@@ -217,6 +217,29 @@ describe("NotificationHistoryPanel", () => {
     Reflect.deleteProperty(window, "matchMedia");
   });
 
+  it("shows the next check time zone as a UTC offset", () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <NotificationHistoryPanel
+          data={createHistoryResponse("smtp: temporary failure")}
+          isLoading={false}
+          isFetching={false}
+          error={null}
+          status="all"
+          setStatus={vi.fn()}
+          loadMore={vi.fn()}
+          refetch={vi.fn()}
+        />
+      </TooltipProvider>,
+    );
+
+    const nextCheck = screen.getByText("下一次检查").parentElement;
+
+    expect(nextCheck).not.toBeNull();
+    expect(within(nextCheck!).getByText("2026-05-16 06:33 (UTC+8)")).toBeInTheDocument();
+    expect(within(nextCheck!).queryByText(/Asia\/Shanghai/)).not.toBeInTheDocument();
+  });
+
   it("shows full history row text in a tooltip when truncated", async () => {
     const user = userEvent.setup();
     const reason = "smtp: 550 mailbox unavailable with a very long provider diagnostic message";
