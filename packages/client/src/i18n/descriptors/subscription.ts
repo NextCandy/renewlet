@@ -1,3 +1,4 @@
+// subscription domain 覆盖订阅表单、列表、导入导出和统计文案，是订阅业务 UI 的主 catalog。
 import { msg } from "@lingui/core/macro";
 
 export const messages = [

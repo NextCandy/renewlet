@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { okResponseSchema } from "./common";
 
+/** healthResponseSchema 是 Docker healthcheck、Cloudflare Worker 和前端存活探测的共同最小响应。 */
 export const healthResponseSchema = z.object({
   ok: z.literal(true),
   time: z.string().min(1),
 }).strict();
 
+/**
+ * 首装状态响应。
+ *
+ * 该接口认证前可访问，只能表达“是否展示初始化入口”；真正创建管理员仍由后端再次校验。
+ */
 export const setupStatusResponseSchema = z.object({
   setupRequired: z.boolean(),
   setupEnabled: z.boolean(),
@@ -17,8 +23,14 @@ export const passwordResetStatusResponseSchema = z.object({
   enabled: z.boolean(),
 }).strict();
 
+/**
+ * 系统更新运行面枚举。
+ *
+ * Docker 支持页面内自更新，Cloudflare/source 只展示版本状态；前端按钮显隐依赖这个字段组合。
+ */
 export const systemRuntimeSchema = z.enum(["docker", "cloudflare", "source"]);
 
+/** 构建信息由 CI ldflags 或 Wrangler vars 注入；不能用于权限判断，只用于版本弹窗展示。 */
 export const systemBuildInfoSchema = z.object({
   version: z.string().min(1),
   commit: z.string(),
@@ -26,6 +38,7 @@ export const systemBuildInfoSchema = z.object({
   buildType: z.string().min(1),
 }).strict();
 
+/** GitHub Release 资产的前端展示视图；真实下载 URL 不进入浏览器，避免绕过 checksum 校验。 */
 export const systemReleaseAssetSchema = z.object({
   name: z.string().min(1),
   size: z.number().int().nonnegative(),
@@ -41,6 +54,7 @@ export const systemReleaseInfoSchema = z.object({
   assets: z.array(systemReleaseAssetSchema),
 }).strict();
 
+/** systemVersionResponseSchema 描述“检查结果”而不触发更新副作用。 */
 export const systemVersionResponseSchema = z.object({
   currentVersion: z.string().min(1),
   latestVersion: z.string().min(1),
@@ -55,6 +69,11 @@ export const systemVersionResponseSchema = z.object({
   build: systemBuildInfoSchema,
 }).strict();
 
+/**
+ * 页面内更新完成响应。
+ *
+ * 成功只表示二进制已替换并进入 restart pending；旧进程退出必须由管理员后续显式确认。
+ */
 export const systemUpdateResponseSchema = z.object({
   ok: z.literal(true),
   currentVersion: z.string().min(1),

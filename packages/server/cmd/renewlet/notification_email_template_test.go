@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试 Go 邮件模板的 HTML/Text fallback、CTA、安全转义和服务端 i18n key 对齐。
+
 import (
 	"math"
 	"strings"

@@ -1,3 +1,4 @@
+// 订阅 schema 测试保护 logo 私有资产路径、http(s) 外链和 date-only 字段的运行时契约。
 import { describe, expect, it } from "vitest";
 import { apiSubscriptionSchema, subscriptionsListResponseSchema, subscriptionCreateBodySchema } from "./subscriptions";
 

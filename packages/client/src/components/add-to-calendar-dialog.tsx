@@ -35,6 +35,7 @@ import {
 interface AddToCalendarDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** null 表示上层详情已被清理；此时不能渲染会创建 token 的子弹窗。 */
   subscription: Subscription | null;
 }
 
@@ -86,6 +87,12 @@ export function AddToCalendarDialog({ open, onOpenChange, subscription }: AddToC
   );
 }
 
+/**
+ * ResolvedAddToCalendarDialog 管理单订阅日历入口。
+ *
+ * Feed URL 是低权限 bearer secret；创建/再生成都必须走 React Query mutation，
+ * 本地 `feedUrl` 只缓存本次新 token，避免等待状态接口刷新时用户复制旧地址。
+ */
 function ResolvedAddToCalendarDialog({ open, onOpenChange, subscription }: ResolvedAddToCalendarDialogProps) {
   const isMobile = useMediaQuery("(max-width: 639px)");
   const { t, label, formatCurrency, formatDateOnly } = useI18n();
@@ -98,6 +105,7 @@ function ResolvedAddToCalendarDialog({ open, onOpenChange, subscription }: Resol
   const [confirmRegenerateOpen, setConfirmRegenerateOpen] = useState(false);
   const visibleFeedUrl = feedUrl ?? subscriptionFeedStatus.data?.feedUrl ?? null;
   useEffect(() => {
+    // 切换订阅时清掉刚生成的本地 token，防止上一张卡片的私有 feed URL 短暂展示到新弹窗。
     setFeedUrl(null);
   }, [subscription.id]);
   const category = config.categories.find((item) => item.value === subscription.category);
@@ -185,6 +193,7 @@ function ResolvedAddToCalendarDialog({ open, onOpenChange, subscription }: Resol
     try {
       const created = await createSubscriptionFeed.mutateAsync(subscription.id);
       setFeedUrl(created.feedUrl);
+      // webcal 唤起依赖浏览器/系统协议处理；即使唤起失败，feed URL 仍留在 UI 中供复制。
       openWebcalUrl(created.feedUrl);
       toast.success(t("subscription.addToCalendarSubscribed"), {
         description: t("subscription.addToCalendarSubscribedDescription"),
@@ -196,6 +205,7 @@ function ResolvedAddToCalendarDialog({ open, onOpenChange, subscription }: Resol
 
   const handleRegenerate = useCallback(async () => {
     try {
+      // 再生成通过删除旧 token 后重新创建完成，保证误分享的旧公开链接立即失效。
       await deleteSubscriptionFeed.mutateAsync(subscription.id);
       const created = await createSubscriptionFeed.mutateAsync(subscription.id);
       setFeedUrl(created.feedUrl);
@@ -220,6 +230,7 @@ function ResolvedAddToCalendarDialog({ open, onOpenChange, subscription }: Resol
 
   const handleDownload = useCallback(() => {
     try {
+      // 下载 ICS 是一次性事件文件，不依赖公开 feed token，适合不支持订阅 URL 的日历客户端。
       downloadFile(new Blob([ics], { type: "text/calendar;charset=utf-8" }), `renewlet-${safeCalendarFilename(subscription.id)}.ics`);
       toast.success(t("subscription.addToCalendarDownloaded"));
     } catch {

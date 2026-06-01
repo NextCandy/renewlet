@@ -1,3 +1,4 @@
+// SettingsScreen 测试保护设置页分区装配和 Cloudflare/Docker 差异入口，不验证普通控件样式。
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";

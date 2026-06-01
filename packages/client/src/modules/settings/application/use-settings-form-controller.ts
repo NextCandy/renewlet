@@ -205,7 +205,7 @@ export interface SettingsFormController {
 /**
  * 集中协调 Settings 页的远端状态、本地编辑态和跨模块用例。
  *
- * 注意： 这里是 Settings 页的“唯一写入口”。新增设置字段时，要同时检查：
+ * 注意： Settings 页只有这一处写入口。新增设置字段时，要同时检查：
  * settings schema、默认值、API merge 策略，以及是否应该纳入统一保存草稿。
  */
 export function useSettingsFormController(): SettingsFormController {
@@ -536,6 +536,7 @@ export function useSettingsFormController(): SettingsFormController {
 
   const handleCreateCalendarFeed = useCallback(async () => {
     try {
+      // Feed URL 是低权限 bearer secret；创建成功后由 React Query 缓存接住新 token，避免用户复制旧地址。
       await createCalendarFeed.mutateAsync();
       toast({
         title: t("settings.calendarFeedGenerated"),
@@ -554,6 +555,7 @@ export function useSettingsFormController(): SettingsFormController {
     const feedUrl = calendarFeedStatus.data?.feedUrl;
     if (!feedUrl) return;
     try {
+      // 复制只读当前缓存中的 URL；不在点击时重新请求，避免系统剪贴板权限弹窗和网络竞态叠加。
       await navigator.clipboard.writeText(feedUrl);
       toast({
         title: t("settings.calendarFeedCopied"),
@@ -570,6 +572,7 @@ export function useSettingsFormController(): SettingsFormController {
 
   const handleRevokeCalendarFeed = useCallback(async () => {
     try {
+      // 撤销必须立即清远端 token；前端缓存只负责让 UI 及时显示 disabled，不作为安全边界。
       await deleteCalendarFeed.mutateAsync();
       toast({
         title: t("settings.calendarFeedRevoked"),
@@ -586,6 +589,7 @@ export function useSettingsFormController(): SettingsFormController {
 
   const handleRegenerateCalendarFeed = useCallback(async () => {
     try {
+      // 轮换使用“先撤销后创建”，确保旧 URL 在服务端失效后才展示新 URL。
       await deleteCalendarFeed.mutateAsync();
       await createCalendarFeed.mutateAsync();
       toast({

@@ -1,3 +1,4 @@
+// SMTP MIME 测试保护 Worker 邮件 multipart/alternative、header 编码和 dot-stuffing，避免通知邮件被注入或截断。
 import { describe, expect, it } from "vitest";
 import { composeEmail, dotStuff, type Mailbox, type SmtpEmail } from "./smtp-mime";
 

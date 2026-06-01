@@ -3,6 +3,12 @@ import { systemService } from "@/services/system-service";
 
 export const systemVersionQueryKey = ["system-version"] as const;
 
+/**
+ * 读取管理员版本状态。
+ *
+ * `force=true` 会绕过后端缓存；小弹窗打开时使用它，后台 badge 保持普通缓存，
+ * 避免每次页面渲染都打 GitHub Release API。
+ */
 export function useSystemVersion(enabled: boolean, force = false) {
   return useQuery({
     queryKey: [...systemVersionQueryKey, force],
@@ -14,6 +20,7 @@ export function useSystemVersion(enabled: boolean, force = false) {
   });
 }
 
+/** 触发 Docker 页面内更新；成功后只代表二进制已替换，还需要管理员显式 restart。 */
 export function useSystemUpdate() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -25,6 +32,7 @@ export function useSystemUpdate() {
   });
 }
 
+/** 单次确认后端 restart pending；Cloudflare/source runtime 会在 service 层返回不支持。 */
 export function useSystemRestart() {
   return useMutation({
     mutationFn: () => systemService.restart(),

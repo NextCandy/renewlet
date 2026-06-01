@@ -1,3 +1,4 @@
+// 导入预览列表测试保护手动 skip 的优先级，避免前端冲突策略覆盖用户明确跳过或服务端错误。
 import { describe, expect, it } from "vitest";
 import type { ImportPreviewResponse } from "@/lib/api/schemas/import-export";
 import { recomputePreviewForConflictMode } from "./import-preview-list";

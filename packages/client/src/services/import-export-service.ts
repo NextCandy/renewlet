@@ -11,6 +11,11 @@ import {
 
 const APPLY_CHUNK_SIZE = 200;
 
+/**
+ * 导入导出服务。
+ *
+ * preview 和 apply 都由后端重新计算冲突；前端分块只解决请求体/事务上限，不改变幂等语义。
+ */
 export const importExportService = {
   async preview(payload: ImportPayload, conflictMode: ImportConflictMode, skipIndexes: readonly number[] = []): Promise<ImportPreviewResponse> {
     return await apiFetch("/api/app/import/preview", importPreviewResponseSchema, {
@@ -80,6 +85,7 @@ export const importExportService = {
 };
 
 async function applyImportPayload(payload: ImportPayload, conflictMode: ImportConflictMode, skipIndexes: readonly number[] = []): Promise<ImportApplyResponse> {
+  // apply 可能写入订阅、设置和自定义配置，超时放宽到导入事务可完成的范围。
   return await apiFetch("/api/app/import/apply", importApplyResponseSchema, {
     method: "POST",
     body: JSON.stringify({ payload, conflictMode, skipIndexes }),

@@ -1,3 +1,4 @@
+// Statistics 页面测试保护统计模型到图表 UI 的装配，避免 Recharts 容器和金额口径脱节。
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";

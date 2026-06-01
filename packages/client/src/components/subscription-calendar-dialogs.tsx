@@ -48,6 +48,7 @@ function CalendarSubscriptionLogo({ subscription, categoryColor, className }: Ca
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
 
   useEffect(() => {
+    // 日历列表会复用同一个 Logo 组件展示不同订阅；错误态必须按 logo 字段隔离。
     setLogoLoadFailed(false);
   }, [subscription.logo]);
 
@@ -111,6 +112,7 @@ export function SubscriptionDetailDialog({
 
   const handleEdit = () => {
     if (subscription && onEditSubscription) {
+      // 先关闭详情再打开编辑，避免两个 Radix Dialog 抢焦点和 aria-hidden 状态。
       onOpenChange(false);
       onEditSubscription(subscription);
     }
@@ -221,6 +223,7 @@ export function SubscriptionDetailDialog({
                   variant="outline"
                   className="border-border"
                   onClick={() => {
+                    // AddToCalendarDialog 自己持有 token mutation 状态；详情弹窗关闭后仍传入当前订阅快照。
                     setShowAddToCalendarDialog(true);
                     onOpenChange(false);
                   }}
@@ -331,6 +334,7 @@ export function DaySubscriptionsDialog({
     : "";
 
   if (isMobile) {
+    // 移动端当天列表使用 Drawer，避免小屏上 Dialog 高度和日历网格滚动互相挤压。
     return (
       <Drawer.Root open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
         {open && (

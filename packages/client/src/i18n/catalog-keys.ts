@@ -1,3 +1,4 @@
+// 由 scripts/generate-i18n-catalog-keys.mjs 生成；MessageKey 是前端静态翻译 helper 的唯一 key union。
 export const MESSAGE_KEYS = [
   "admin.actions",
   "admin.banned",

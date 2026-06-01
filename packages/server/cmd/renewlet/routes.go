@@ -200,15 +200,19 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 	auth.POST("/notifications/test", func(e *core.RequestEvent) error { return handleNotificationTest(app, e) })
 	auth.GET("/notifications/history", func(e *core.RequestEvent) error { return handleNotificationHistory(app, e) })
 	auth.POST("/notifications/run", func(e *core.RequestEvent) error { return handleNotificationRun(app, e) })
+	// 导入预览和应用都要求登录态；冲突判断只在当前用户数据内完成，避免备份里的来源 ID 探测他人订阅。
 	auth.POST("/import/preview", func(e *core.RequestEvent) error { return handleImportPreview(app, e) })
 	auth.POST("/import/apply", func(e *core.RequestEvent) error { return handleImportApply(app, e) })
+	// 私有资产读取必须经过 handler 的 record.user 校验，不能直接暴露 PocketBase protected file URL。
 	auth.GET("/assets/{id}", func(e *core.RequestEvent) error { return handleAssetRead(app, e) })
+	// Feed 管理 API 只服务登录用户；公开 ICS route 另走 token bearer secret，不复用 session。
 	auth.GET("/calendar-feed", func(e *core.RequestEvent) error { return handleCalendarFeedStatus(app, e) })
 	auth.POST("/calendar-feed", func(e *core.RequestEvent) error { return handleCalendarFeedCreate(app, e) })
 	auth.DELETE("/calendar-feed", func(e *core.RequestEvent) error { return handleCalendarFeedDelete(app, e) })
 	auth.GET("/subscriptions/{id}/calendar-feed", func(e *core.RequestEvent) error { return handleSubscriptionCalendarFeedStatus(app, e) })
 	auth.POST("/subscriptions/{id}/calendar-feed", func(e *core.RequestEvent) error { return handleSubscriptionCalendarFeedCreate(app, e) })
 	auth.DELETE("/subscriptions/{id}/calendar-feed", func(e *core.RequestEvent) error { return handleSubscriptionCalendarFeedDelete(app, e) })
+	// 媒体候选统一入口承接 favicon 与内置 provider，前端不再拼旧 favicon-search/图标 provider 路径。
 	auth.POST("/media/candidates", mediaCandidates)
 
 	router.GET("/api/app/account/password-reset/status", func(e *core.RequestEvent) error {

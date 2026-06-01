@@ -1,3 +1,4 @@
+// calendar-links 测试保护 webcal/Google/Outlook URL 构造，避免公开 ICS feed token 在外部日历链接中丢失。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildAndroidCalendarIntentUrl,

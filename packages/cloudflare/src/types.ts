@@ -2,6 +2,11 @@ import type { AdminUser } from "@renewlet/shared/schemas/admin";
 import type { ApiAppSettings } from "@renewlet/shared/schemas/settings";
 import type { ApiSubscription } from "@renewlet/shared/schemas/subscriptions";
 
+/**
+ * Env 描述 wrangler 绑定和 CI 注入的构建变量。
+ *
+ * DB/R2 binding 名必须与 wrangler.jsonc 保持一致；版本字段只用于展示，不参与页面内更新。
+ */
 export interface Env {
   DB: D1Database;
   ASSETS_BUCKET: R2Bucket;
@@ -12,6 +17,7 @@ export interface Env {
   RENEWLET_BUILD_TIME?: string;
 }
 
+/** D1 users 行模型；只在 Worker 内部使用，公开用户响应必须经过 shared/admin schema。 */
 export interface UserRow {
   id: string;
   email: string;
@@ -26,6 +32,7 @@ export interface UserRow {
   updated_at: string;
 }
 
+/** Worker session 表保存 token hash；浏览器只持有原始 Bearer token，不读取此行结构。 */
 export interface SessionRow {
   id: string;
   token_hash: string;
@@ -35,6 +42,7 @@ export interface SessionRow {
   last_seen_at: string;
 }
 
+/** 联表认证结果；字段前缀用于避免 users 与 sessions 同名列在 D1 查询中互相覆盖。 */
 export interface SessionAuthRow extends UserRow {
   session_id: string;
   session_token_hash: string;
@@ -44,6 +52,7 @@ export interface SessionAuthRow extends UserRow {
   session_last_seen_at: string;
 }
 
+/** D1 订阅行模型；snake_case 与整数布尔必须在 `toApiSubscription` 里收敛到 shared schema。 */
 export interface SubscriptionRow {
   id: string;
   user_id: string;
@@ -72,6 +81,7 @@ export interface SubscriptionRow {
   updated_at: string;
 }
 
+/** R2 私有资产的 D1 元数据索引；权限判断只能信任这里的 user_id，而不是 R2 key。 */
 export interface AssetRow {
   id: string;
   user_id: string;
@@ -84,6 +94,7 @@ export interface AssetRow {
   updated_at: string;
 }
 
+/** 通知任务审计行；本地计划时间和 UTC instant 同存，便于用户解释与后台排序。 */
 export interface NotificationJobRow {
   id: string;
   user_id: string;
@@ -99,6 +110,7 @@ export interface NotificationJobRow {
   updated_at: string;
 }
 
+/** 日历订阅 token 是低权限 bearer secret，D1 保存明文以便登录用户可查看和撤销。 */
 export interface CalendarFeedRow {
   id: string;
   user_id: string;
@@ -109,6 +121,7 @@ export interface CalendarFeedRow {
   updated_at: string;
 }
 
+/** 已通过 Worker session 校验的请求上下文。 */
 export interface AuthContext {
   token: string;
   session: SessionRow;

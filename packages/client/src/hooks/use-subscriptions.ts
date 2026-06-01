@@ -22,6 +22,7 @@ const SUBSCRIPTIONS_LIST_QUERY_KEY = [...SUBSCRIPTIONS_QUERY_KEY, "list"] as con
 const SUBSCRIPTIONS_INFINITE_QUERY_KEY = [...SUBSCRIPTIONS_QUERY_KEY, "infinite"] as const;
 const SUBSCRIPTIONS_PAGE_QUERY_KEY = [...SUBSCRIPTIONS_QUERY_KEY, "page"] as const;
 
+/** useSubscriptions 保留全量列表入口，避免统计/导出逻辑自己拼分页结果造成口径漂移。 */
 export function useSubscriptions() {
   return useQuery({
     queryKey: SUBSCRIPTIONS_LIST_QUERY_KEY,
@@ -29,6 +30,11 @@ export function useSubscriptions() {
   });
 }
 
+/**
+ * useInfiniteSubscriptions 读取游标分页订阅并在 hook 边界摊平成列表。
+ *
+ * 页面只消费 `subscriptions`，避免把 Worker/Go 的分页响应形状泄漏到筛选、虚拟列表和 CRUD 控制器。
+ */
 export function useInfiniteSubscriptions() {
   const query = useInfiniteQuery({
     queryKey: SUBSCRIPTIONS_INFINITE_QUERY_KEY,
@@ -47,6 +53,7 @@ export function useInfiniteSubscriptions() {
   };
 }
 
+/** useSubscriptionsPage 让局部视图显式绑定 cursor/limit，避免复用无限滚动缓存时读到错误页。 */
 export function useSubscriptionsPage(cursor?: string | null, limit?: number) {
   return useQuery({
     queryKey: [...SUBSCRIPTIONS_PAGE_QUERY_KEY, cursor ?? null, limit ?? subscriptionService.pageSize] as const,
@@ -54,10 +61,12 @@ export function useSubscriptionsPage(cursor?: string | null, limit?: number) {
   });
 }
 
+/** invalidateSubscriptionsQueries 让列表、分页和无限滚动缓存共享同一个失效前缀。 */
 export function invalidateSubscriptionsQueries(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: SUBSCRIPTIONS_QUERY_KEY });
 }
 
+/** useCreateSubscription 写入后只失效订阅缓存，由 service 层负责 Docker/Cloudflare 运行面分流。 */
 export function useCreateSubscription() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -71,6 +80,7 @@ export function useCreateSubscription() {
   });
 }
 
+/** useUpdateSubscription 保存完整 domain 对象，避免编辑弹窗关心 API patch 形状。 */
 export function useUpdateSubscription() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -83,6 +93,7 @@ export function useUpdateSubscription() {
   });
 }
 
+/** useDeleteSubscription 删除后统一失效订阅前缀，保证统计和日历入口不读旧列表。 */
 export function useDeleteSubscription() {
   const queryClient = useQueryClient();
   return useMutation({

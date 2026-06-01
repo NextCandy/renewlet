@@ -1,3 +1,4 @@
+// subscriptions hook 测试保护 PocketBase 列表契约、CRUD 写入 payload 和 query invalidation 范围。
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";

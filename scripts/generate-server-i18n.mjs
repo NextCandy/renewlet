@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// 服务端文案生成器：把 shared/data/server-i18n/active.*.json 同步到 Go embed 和 Worker TS catalog。
+// `--check` 只比对生成结果；无参数会重写两个运行面的生成文件。
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const sourceDir = path.join(rootDir, "packages/shared/data/server-i18n");
 const serverOutDir = path.join(rootDir, "packages/server/cmd/renewlet/i18n");

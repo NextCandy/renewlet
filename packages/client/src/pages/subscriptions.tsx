@@ -54,6 +54,7 @@ import {
 /** 空订阅数组：用于在数据未加载完成时提供稳定引用，避免 useMemo 依赖抖动。 */
 const EMPTY_SUBSCRIPTIONS: Subscription[] = [];
 const SUBSCRIPTION_VIRTUALIZATION_THRESHOLD = 60;
+// 虚拟列表按“行”估算高度；网格模式一行可能包含 2-3 张卡片，估算值要覆盖最高卡片避免滚动跳动。
 const SUBSCRIPTION_GRID_ROW_GAP = 16;
 const SUBSCRIPTION_GRID_ROW_ESTIMATE = 184;
 const SUBSCRIPTION_LIST_ROW_ESTIMATE = 142;
@@ -130,6 +131,7 @@ function SubscriptionGrid({ subscriptions, viewMode, timeZone, onEdit, onDelete 
     );
   }
 
+  // 大列表才启用虚拟化：小列表保留完整 DOM，避免弹层定位、浏览器查找和 E2E 可见性断言变复杂。
   return (
     <VirtualizedList
       count={rows.length}
@@ -206,6 +208,7 @@ const Subscriptions = () => {
   const settings = settingsQuery.data ?? DEFAULT_SETTINGS;
   const { exportToJSON, exportToJSONWithSecrets, exportToCSV } =
     useSubscriptionExport(filteredSubscriptions, subscriptions, config, settings, locale, timeZone);
+  // 筛选标签来自用户配置，可能被删除或禁用；找不到配置时仍显示原始值，避免筛选状态变成空白。
   const categoryFilterLabel =
     categoryFilter === "all"
       ? t("subscriptions.allCategories")
@@ -247,7 +250,6 @@ const Subscriptions = () => {
       <Header onAddSubscription={handleAddSubscription} availableTags={allTags} />
 
       <main className="app-main mx-auto max-w-7xl">
-        {/* 页面标题 */}
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">{t("subscriptions.title")}</h1>
@@ -301,7 +303,6 @@ const Subscriptions = () => {
           </div>
         </div>
 
-        {/* 筛选器 */}
         <div className={cn("mb-6 rounded-xl border border-border bg-card p-5", isMobileTagFilter ? "grid gap-3" : "grid gap-4")}>
           {isMobileTagFilter ? (
             <>
@@ -479,7 +480,6 @@ const Subscriptions = () => {
           )}
         </div>
 
-        {/* 订阅网格/列表 */}
         {filteredSubscriptions.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/50 py-16">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">

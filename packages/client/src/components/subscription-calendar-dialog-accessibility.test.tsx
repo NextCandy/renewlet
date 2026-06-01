@@ -1,3 +1,4 @@
+// 日历弹窗可访问性测试保护移动/桌面详情弹层的标题、焦点和订阅入口语义。
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assertDateOnly } from "@/lib/time/date-only";

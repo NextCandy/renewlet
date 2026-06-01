@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试 Docker 页面内自更新：Release 选择、checksum、路径穿越防护、并发锁和 restart pending 状态流。
+
 import (
 	"archive/tar"
 	"bytes"

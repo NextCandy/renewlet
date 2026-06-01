@@ -32,6 +32,7 @@ var (
 	defaultSystemUpdateService = newSystemUpdateService(defaultSystemReleaseClient())
 )
 
+// systemUpdateError 保留可本地化 message，同时让 route 能用 errors.Is 映射 HTTP 状态。
 type systemUpdateError struct {
 	kind    error
 	message string
@@ -51,6 +52,8 @@ type systemReleaseClient interface {
 	FetchText(ctx context.Context, sourceURL string, maxBytes int64) ([]byte, error)
 }
 
+// systemUpdateService 持有页面内更新的进程内状态。
+// cacheMu 只保护版本检查缓存；updateMu 保护“下载/替换中”和“等待管理员确认重启”两个互斥状态。
 type systemUpdateService struct {
 	client      systemReleaseClient
 	now         func() time.Time

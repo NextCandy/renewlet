@@ -1,3 +1,4 @@
+// Header 测试守住全局导航、会话菜单和新增订阅入口，避免路由重排时破坏主要工作流入口。
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

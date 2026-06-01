@@ -22,6 +22,7 @@ export function useSubscriptionCrud(subscriptions: readonly Subscription[]) {
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const { scheduleCleanup: scheduleEditCleanup, cancelCleanup: cancelEditCleanup } = useDeferredDialogCleanup(() => {
+    // 关闭动画结束后再丢弃编辑对象，避免表单内容在 Dialog fade-out 中瞬间回到空态。
     setEditingSubscription(null);
   });
 
@@ -49,6 +50,7 @@ export function useSubscriptionCrud(subscriptions: readonly Subscription[]) {
   const handleEditDialogOpenChange = (nextOpen: boolean) => {
     setEditDialogOpen(nextOpen);
     if (nextOpen) {
+      // 用户在关闭动画未结束时重新打开同一弹窗时，要保留当前编辑上下文。
       cancelEditCleanup();
       return;
     }

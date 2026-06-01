@@ -19,10 +19,18 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { MessageKey, MessageParams } from '@/i18n/messages';
 
 interface BuiltInIconSourcesSectionProps {
+  /** 内置图标 provider 开关，必须覆盖 shared 中声明的所有 provider。 */
   sources: AppSettings["builtInIconSources"];
+  /** 受控更新；SettingsScreen 负责统一保存草稿，组件内不直接打 API。 */
   onChange: (sources: AppSettings["builtInIconSources"]) => void;
 }
 
+/**
+ * 管理内置 Logo/Icon 候选来源。
+ *
+ * 业务约束：至少保留一个 provider 启用，否则媒体候选会退化成纯 favicon/domain 兜底，
+ * 导入自动匹配和手动搜索的结果质量都会明显下降。
+ */
 export function BuiltInIconSourcesSection({ sources, onChange }: BuiltInIconSourcesSectionProps) {
   const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -44,6 +52,7 @@ export function BuiltInIconSourcesSection({ sources, onChange }: BuiltInIconSour
         ...patch,
       },
     };
+    // 至少保留一个来源启用；这是前端 UX 保护，后端/Worker 仍按 settings contract 自行过滤候选。
     if (BUILT_IN_ICON_PROVIDERS.every((item) => !next[item].enabled)) return;
     onChange(next);
   };
@@ -117,8 +126,10 @@ export function BuiltInIconSourcesSection({ sources, onChange }: BuiltInIconSour
 }
 
 interface BuiltInIconSourceCardProps {
+  /** shared 契约中的 provider id，用于读取文案、settings 字段和候选来源。 */
   provider: BuiltInIconProvider;
   source: AppSettings["builtInIconSources"][BuiltInIconProvider];
+  /** 当前 provider 是最后一个启用来源时禁用开关，避免把候选体系关空。 */
   disableSourceToggle: boolean;
   onUpdate: (
     provider: BuiltInIconProvider,

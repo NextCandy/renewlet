@@ -1,3 +1,4 @@
+// apiFetch 测试保护 Zod 运行时校验、错误归一和超时取消语义，是前端网络边界的主回归基线。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch } from "./api-client";
 import { okResponseSchema } from "@/lib/api/schemas/common";

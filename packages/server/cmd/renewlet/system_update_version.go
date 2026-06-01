@@ -32,6 +32,7 @@ func parseSystemVersion(rawVersion string) (string, semanticVersion, bool) {
 func isNewerSystemVersion(current string, latest string) bool {
 	_, currentVersion, currentOK := parseSystemVersion(current)
 	_, latestVersion, latestOK := parseSystemVersion(latest)
+	// 页面内更新只接受稳定版 Release；RC 可用于发布验证，但不能成为管理员后台的一键升级目标。
 	if !currentOK || !latestOK || latestVersion.prerelease != "" {
 		return false
 	}
@@ -56,6 +57,7 @@ func safeBackupVersion(version string) string {
 	if value == "" {
 		return strconv.FormatInt(time.Now().Unix(), 10)
 	}
+	// 版本字符串会进入备份文件名，替换路径分隔符避免异常 build metadata 写出备份目录。
 	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_", " ", "_")
 	return replacer.Replace(value)
 }

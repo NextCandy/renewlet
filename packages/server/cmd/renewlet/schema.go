@@ -226,6 +226,7 @@ func cleanupInvalidSubscriptionLogos(app core.App) error {
 }
 
 func ownerRules(collection *core.Collection) {
+	// 所有业务 collection 都以 user relation 做隔离；route 层管理员能力不能绕过这里的默认 owner 边界。
 	listRule := "user = @request.auth.id"
 	createRule := "@request.auth.id != '' && user = @request.auth.id"
 	collection.ListRule = types.Pointer(listRule)
@@ -311,6 +312,7 @@ func ensureSettingsCollection(app core.App, users *core.Collection) error {
 		if err := ensureAutodates(c); err != nil {
 			return err
 		}
+		// 每个用户只能有一份 settings；route/service 用 upsert 语义，唯一索引是并发写入的最终保护。
 		c.AddIndex("idx_settings_user_unique", true, "user", "")
 		return nil
 	})
@@ -328,6 +330,7 @@ func ensureCustomConfigsCollection(app core.App, users *core.Collection) error {
 		if err := ensureAutodates(c); err != nil {
 			return err
 		}
+		// 自定义配置与 settings 分开存储，避免大 JSON 配置保存失败时污染通知/主题等核心设置。
 		c.AddIndex("idx_custom_configs_user_unique", true, "user", "")
 		return nil
 	})
@@ -339,6 +342,7 @@ func ensureAssetsCollection(app core.App, users *core.Collection) error {
 		fields := []core.Field{
 			userRelation(users),
 			&core.SelectField{Name: "kind", Required: true, Values: []string{"logo", "icon"}},
+			// Protected 文件只能通过自定义 /api/app/assets/{id} 读取，确保每次访问都重新校验 owner。
 			&core.FileField{Name: "file", MaxSelect: 1, MaxSize: 2 * 1024 * 1024, MimeTypes: []string{"image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"}, Protected: true, Required: true},
 			&core.TextField{Name: "mimeType", Max: 100},
 			&core.NumberField{Name: "sizeBytes", OnlyInt: true, Min: types.Pointer(0.0)},
@@ -379,6 +383,7 @@ func ensureNotificationJobsCollection(app core.App, users *core.Collection) erro
 		if err := ensureAutodates(c); err != nil {
 			return err
 		}
+		// 同一用户/本地日期/本地时间/时区只允许一个 job，是 cron 重试和并发 tick 的幂等锁。
 		c.AddIndex("idx_notification_jobs_user_local_date", false, "user, scheduledLocalDate", "")
 		c.AddIndex("idx_notification_jobs_user_local_time_unique", true, "user, scheduledLocalDate, scheduledLocalTime, timeZone", "")
 		return nil
@@ -408,6 +413,7 @@ func ensureCalendarFeedsCollection(app core.App, users *core.Collection) error {
 		removeIndex(c, "idx_calendar_feeds_user_unique")
 		removeIndex(c, "idx_calendar_feeds_token_hash_unique")
 		removeIndex(c, "idx_calendar_feeds_user_subscription")
+		// token 是公开 ICS route 的 bearer secret；用户维度唯一索引保护管理端展示，token 唯一索引保护公开读取。
 		c.AddIndex("idx_calendar_feeds_user_all_unique", true, "user", "scope = 'all'")
 		c.AddIndex("idx_calendar_feeds_token_unique", true, "token", "")
 		c.AddIndex("idx_calendar_feeds_user_subscription_unique", true, "user, subscriptionId", "scope = 'subscription'")

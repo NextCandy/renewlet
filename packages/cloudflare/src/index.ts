@@ -32,6 +32,12 @@ import { errorResponse, methodNotAllowed, pathSegments, requestLocale, toRespons
 import { serverText } from "./server-i18n";
 import type { Env } from "./types";
 
+/**
+ * Cloudflare Worker 入口。
+ *
+ * Static Assets 负责前端文件，Worker 只接管 `/api/*`、公开 ICS 和 scheduled cron；这里的显式路由表
+ * 是 Cloudflare 运行面的产品 API 边界，不应扩展成 PocketBase REST 兼容层。
+ */
 const worker: ExportedHandler<Env> = {
   async fetch(request, env) {
     try {
@@ -49,6 +55,11 @@ const worker: ExportedHandler<Env> = {
 
 export default worker;
 
+/**
+ * handleRequest 完成 Worker 顶层路由分发。
+ *
+ * `/calendar/renewals.ics` 是 bearer token 公共入口，不能被 `/api/*` 的认证假设覆盖。
+ */
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const locale = requestLocale(request);
@@ -149,11 +160,17 @@ async function routeApp(request: Request, env: Env, url: URL): Promise<Response>
   return errorResponse(404, serverText(requestLocale(request), "common.notFound"), "NOT_FOUND");
 }
 
+/**
+ * routeMethods 执行方法白名单。
+ *
+ * 显式返回 405 能让前端和巡检快速发现 route 漂移，而不是把错误吞成 404。
+ */
 async function routeMethods(request: Request, handlers: Partial<Record<string, () => Promise<Response> | Response>>): Promise<Response> {
   const handler = handlers[request.method];
   return handler ? await handler() : methodNotAllowed(requestLocale(request));
 }
 
+/** health 返回最小可缓存外的存活信息；不读取 D1/R2，避免健康检查放大平台短暂抖动。 */
 function health(): Response {
   return Response.json(healthResponseSchema.parse({ ok: true, time: new Date().toISOString() }), {
     headers: { "x-content-type-options": "nosniff" },

@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * 发布辅助脚本。
+ *
+ * 触发时机：maintainer release workflow、本地准备 release 和 tag publish workflow。
+ * 副作用：sync-version 会改 workspace package.json；package-docker 会写 tmp/release；其它命令只输出校验结果/正文。
+ */
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -288,6 +294,7 @@ function packageDocker(rawVersion) {
     const source = join(repoRoot, "deploy", file);
     const target = join(packageDir, file);
     const content = readFileSync(source, "utf8");
+    // Release 附件必须 pin 当前版本；用户离线保存历史 zip 时不应被 latest 拉到未来版本。
     writeFileSync(target, patchDockerImage(content, version));
     if (file === "docker-deploy.sh") {
       chmodSync(target, 0o755);
@@ -298,11 +305,13 @@ function packageDocker(rawVersion) {
     if (existsSync(zipPath)) {
       rmSync(zipPath);
     }
+    // zip 在临时父目录执行，确保附件内只有 renewlet-docker-vX.Y.Z/ 一层，用户解压后不会污染当前目录。
     execFileSync("zip", ["-qr", zipPath, basename(packageDir)], {
       cwd: tempDir,
       stdio: "inherit",
     });
   } finally {
+    // release workflow 可重跑；临时目录必须无条件清理，避免历史 compose/env 被下一次打包带走。
     rmSync(tempDir, { recursive: true, force: true });
   }
 

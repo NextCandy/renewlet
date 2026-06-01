@@ -29,6 +29,7 @@ type Channel = ApiAppSettings["enabledChannels"][number];
 type NotificationMessage = NotificationEmailMessage;
 type ScheduleOccurrence = ReturnType<typeof scheduleOccurrence>;
 
+/** 发送单渠道测试通知；settings 来自表单快照，只临时合并校验，不写入 D1。 */
 export async function notificationTest(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -39,6 +40,7 @@ export async function notificationTest(request: Request, env: Env): Promise<Resp
   return ok();
 }
 
+/** 手动运行当前用户通知任务；force 只影响本次 due 判断，仍复用真实发送与审计链路。 */
 export async function notificationRun(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -48,6 +50,7 @@ export async function notificationRun(request: Request, env: Env): Promise<Respo
   return json({ ok: true, sent: true, summary: result.summary });
 }
 
+/** 返回当前用户通知概览和历史审计；分页与状态过滤都在 user_id 约束内完成。 */
 export async function notificationHistory(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(request, env);
   const url = new URL(request.url);
@@ -82,6 +85,7 @@ export async function notificationHistory(request: Request, env: Env): Promise<R
   }));
 }
 
+/** Cloudflare Cron 入口按用户分页并发执行，避免一次 Worker tick 放大 D1 与外部通知 provider 压力。 */
 export async function runScheduledNotifications(env: Env): Promise<void> {
   for (let offset = 0; ; offset += CRON_USER_PAGE_SIZE) {
     const users = await env.DB.prepare("SELECT id FROM users WHERE banned = 0 ORDER BY id LIMIT ? OFFSET ?")
@@ -93,6 +97,7 @@ export async function runScheduledNotifications(env: Env): Promise<void> {
   }
 }
 
+/** 简单有界并发执行器；Worker 单次 Cron 不能为每个用户同时打开外部通知请求。 */
 async function runBounded<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>): Promise<void> {
   let nextIndex = 0;
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
@@ -174,6 +179,7 @@ async function runForUser(
 
 type SettingsPatch = z.infer<typeof settingsUpdateBodySchema>;
 
+/** 合并临时设置 patch 只服务“测试发送/手动运行”，不会写回 D1 用户设置。 */
 async function effectiveSettings(env: Env, userId: string, patch?: SettingsPatch): Promise<ApiAppSettings> {
   const current = await getSettings(env, userId);
   const stripped = stripUndefined(patch ?? {});

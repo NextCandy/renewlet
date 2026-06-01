@@ -1,3 +1,4 @@
+// Renewlet 导入测试保护正式导出格式和旧导入桥的收敛边界，确保彻底转换后不放宽新契约。
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CUSTOM_CONFIG } from "@/types/config";
 import { DEFAULT_SETTINGS, MAX_REMINDER_DAYS, type Subscription } from "@/types/subscription";

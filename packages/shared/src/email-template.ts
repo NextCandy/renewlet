@@ -23,6 +23,7 @@ export interface NotificationEmailSettings {
   };
 }
 
+/** 通知邮件中的单条提醒；Go 与 Worker 都用它生成同语义 HTML+Text 邮件。 */
 export interface NotificationEmailItem {
   type: "renewal" | "trial" | "expired" | string;
   subscriptionId?: string;
@@ -40,6 +41,7 @@ export interface NotificationEmailItem {
   };
 }
 
+/** 渠道层传入邮件模板的统一消息，不包含任何 SMTP token 或 provider 响应。 */
 export interface NotificationEmailMessage {
   title: string;
   content: string;
@@ -58,6 +60,7 @@ export interface NotificationEmail {
   html: string;
 }
 
+/** 邮件 HTML 主题色是内联样式输入；必须控制在模板可预测的颜色 token 内。 */
 export interface EmailTheme {
   primary: string;
   primaryText: string;
@@ -139,6 +142,11 @@ export interface EmailCta {
   label: string;
 }
 
+/**
+ * 构建通知邮件的 subject/text/html 三件套。
+ *
+ * HTML 超过体积上限时会退回 compact 版本；这是为了兼容邮箱客户端和 Worker/Go 两个发送路径的内存预算。
+ */
 export function buildNotificationEmail(
   settings: NotificationEmailSettings,
   message: NotificationEmailMessage,

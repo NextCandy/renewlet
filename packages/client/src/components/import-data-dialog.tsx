@@ -46,7 +46,9 @@ import { cn } from "@/lib/utils";
 interface ImportDataDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 导入解析使用当前设置里的 timezone/defaultCurrency/reminder 默认值，不自行读取全局 query。 */
   settings: AppSettings;
+  /** Wallos/Renewlet 导入会映射分类、状态、支付方式和货币，必须使用当前已规范化配置。 */
   config: CustomConfig;
 }
 
@@ -102,6 +104,7 @@ export function ImportDataDialog({ open, onOpenChange, settings, config }: Impor
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    // 导入弹窗关闭即丢弃本地预览、skip 状态和 staged Logo；真正写入只发生在 apply 阶段。
     if (!nextOpen) reset();
     onOpenChange(nextOpen);
   };
@@ -170,6 +173,7 @@ export function ImportDataDialog({ open, onOpenChange, settings, config }: Impor
 
   const handleFileSelected = async (nextFile: File | null) => {
     if (!nextFile) return;
+    // 文件对象只保存在弹窗生命周期内；预览失败时清掉 PreparedImport，避免应用上一次成功解析的包。
     setFile(nextFile);
     setParsing(true);
     setError(null);
@@ -268,6 +272,7 @@ export function ImportDataDialog({ open, onOpenChange, settings, config }: Impor
       // 资产上传属于 apply 阶段：预览不产生写入，且 skip 行不会上传 staged/zip Logo。
       const payload = parseApplyPayload(await resolveImportAssets(prepared, effectivePreview.items, (done, total) => setAssetProgress({ done, total })));
       const result = parseApplyResult(await importExportService.applyChunked(payload, conflictMode, skipIndexList, (done, total) => setApplyProgress({ done, total })));
+      // 导入可能同时写订阅、设置和自定义配置；成功后统一失效，避免页面继续展示导入前缓存。
       await Promise.all([
         invalidateSubscriptionsQueries(queryClient),
         queryClient.invalidateQueries({ queryKey: ["settings"] }),

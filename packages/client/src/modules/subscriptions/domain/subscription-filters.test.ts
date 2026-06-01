@@ -1,3 +1,4 @@
+// 订阅筛选测试保护搜索、标签 OR 语义、有效状态和月成本排序，避免列表页重写筛选规则。
 import { describe, expect, it } from "vitest";
 import { assertDateOnly } from "@/lib/time/date-only";
 import type { Subscription } from "@/types/subscription";

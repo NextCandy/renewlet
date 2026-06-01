@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { formatter } from "@lingui/format-po";
 
+// i18n catalog 守卫：CI 和 `pnpm --filter @renewlet/client i18n:check` 调用。
+// 只检查 Lingui catalog、catalog key 和服务端文案生成物是否同步，不主动改仓库文件。
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const clientDir = path.join(rootDir, "packages/client");
 const clientRequire = createRequire(path.join(clientDir, "package.json"));

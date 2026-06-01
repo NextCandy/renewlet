@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+// defaultSystemReleaseClient 返回只信任 GitHub Release 下载边界的 HTTP 客户端。
 func defaultSystemReleaseClient() systemReleaseClient {
 	return &httpSystemReleaseClient{
 		apiClient: &http.Client{Timeout: systemUpdateAPITimeout},
@@ -31,6 +32,7 @@ func defaultSystemReleaseClient() systemReleaseClient {
 	}
 }
 
+// FetchLatestRelease 读取官方仓库最新 Release，并把网络/限流错误归类为可展示的版本检查失败。
 func (client *httpSystemReleaseClient) FetchLatestRelease(ctx context.Context) (*githubRelease, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+systemUpdateRepository+"/releases/latest", nil)
 	if err != nil {
@@ -54,6 +56,7 @@ func (client *httpSystemReleaseClient) FetchLatestRelease(ctx context.Context) (
 	return &release, nil
 }
 
+// DownloadFile 下载自更新产物到预先分配的临时路径，并限制可信 host、跳转次数和最大体积。
 func (client *httpSystemReleaseClient) DownloadFile(ctx context.Context, sourceURL string, targetPath string, maxBytes int64) error {
 	if err := validateTrustedDownloadURL(sourceURL); err != nil {
 		return err
@@ -86,6 +89,7 @@ func (client *httpSystemReleaseClient) DownloadFile(ctx context.Context, sourceU
 	return target.Sync()
 }
 
+// FetchText 下载 checksum 等小文本资产；调用方负责在返回后检查是否超过 maxBytes。
 func (client *httpSystemReleaseClient) FetchText(ctx context.Context, sourceURL string, maxBytes int64) ([]byte, error) {
 	if err := validateTrustedDownloadURL(sourceURL); err != nil {
 		return nil, err

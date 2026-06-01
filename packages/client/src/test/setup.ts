@@ -8,6 +8,7 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
+// jsdom 没有真实浏览器 storage；补内存实现让 auth/theme/i18n 测试保持和浏览器同一 API 形状。
 class MemoryStorageMock implements Storage {
   private store = new Map<string, string>();
 
@@ -42,6 +43,7 @@ function ensureStorage(name: "localStorage" | "sessionStorage") {
   vi.stubGlobal(name, new MemoryStorageMock());
 }
 
+// 组件库依赖 ResizeObserver/scrollIntoView，但单测只验证 React 状态和可访问输出，不需要真实布局引擎。
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 ensureStorage("localStorage");
 ensureStorage("sessionStorage");

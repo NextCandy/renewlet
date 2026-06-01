@@ -17,6 +17,7 @@ import type { CalendarFeedRow, Env } from "./types";
 
 type CalendarFeedScope = CalendarFeedRow["scope"];
 
+/** 读取全局续费日历 feed 状态；只返回 URL 展示态，不把 token 拆成独立字段。 */
 export async function readCalendarFeed(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -25,6 +26,7 @@ export async function readCalendarFeed(request: Request, env: Env): Promise<Resp
   return json(calendarFeedStatusResponseSchema.parse({ calendarFeed: calendarFeedStatus(row, request) }));
 }
 
+/** 创建或复用全局 feed；请求体必须为空对象，token 始终由服务端生成。 */
 export async function createCalendarFeed(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -62,6 +64,7 @@ export async function readSubscriptionCalendarFeed(request: Request, env: Env, s
   return json(calendarFeedStatusResponseSchema.parse({ calendarFeed: calendarFeedStatus(row, request) }));
 }
 
+/** 创建单订阅 feed 前先确认订阅属于当前用户，避免用 feed URL 探测他人订阅 ID。 */
 export async function createSubscriptionCalendarFeed(request: Request, env: Env, subscriptionId: string): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -132,6 +135,7 @@ export async function calendarFeedIcs(request: Request, env: Env): Promise<Respo
   });
 }
 
+/** 渲染公开 ICS 内容；scope 决定导出全局续费列表还是单个订阅的一次全日事件。 */
 async function renderCalendarFeed(
   env: Env,
   request: Request,

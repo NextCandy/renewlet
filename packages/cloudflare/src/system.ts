@@ -7,6 +7,11 @@ import type { Env } from "./types";
 
 const PACKAGE_VERSION = packageJson.version;
 
+/**
+ * systemVersion 返回 Cloudflare 运行面的版本状态。
+ *
+ * Worker 部署没有可替换的本地二进制，前端只能展示版本和 Release 链接，不能复用 Docker 页面内更新流程。
+ */
 export async function systemVersion(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env);
   const locale = requestLocale(request);
@@ -39,6 +44,11 @@ export async function systemVersion(request: Request, env: Env): Promise<Respons
   }));
 }
 
+/**
+ * systemUpdate 明确拒绝 Cloudflare 页面内更新。
+ *
+ * Cloudflare 的发布入口是 Wrangler/Workers Builds，管理员按钮不能触发容器式下载、校验和重启状态机。
+ */
 export async function systemUpdate(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env);
   const locale = requestLocale(request);

@@ -23,18 +23,31 @@ function CropDialogFallback() {
 }
 
 export interface DeferredLogoAsset {
+  /** 待导入订阅最终保存前才上传，避免用户取消导入后留下孤立私有资产。 */
   blob: Blob;
+  /** 导入确认时传给资产服务的文件名；真实对象路径仍由后端生成。 */
   filename: string;
+  /** 本地预览 URL，只能停留在导入草稿态，不能写进订阅持久化字段。 */
   previewUrl: string;
 }
 
 interface ImportLogoEditorProps {
+  /** 导入行的服务名，同时作为首次搜索的 autoQuery。 */
   name: string;
+  /** 当前远端/私有资产 Logo URL；选择本地草稿资产时会临时为空。 */
   value?: string | null | undefined;
+  /** 已 staged 本地资产的预览 URL，由导入控制器持有，避免弹层重开时丢失预览。 */
   assetPreviewUrl?: string | undefined;
+  /** 输出远端 URL 或 deferred asset；真正上传发生在导入提交阶段。 */
   onChange: (value: string | null, asset?: DeferredLogoAsset) => void;
 }
 
+/**
+ * ImportLogoEditor 为导入预览行提供 Logo 修正能力。
+ *
+ * 与普通 LogoPicker 不同，这里不能立即上传本地文件：导入批量确认前用户可能撤销整批数据，
+ * 所以组件只 stage Blob 与预览，最终由导入流程统一落库。
+ */
 export function ImportLogoEditor({ name, value, assetPreviewUrl, onChange }: ImportLogoEditorProps) {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +70,7 @@ export function ImportLogoEditor({ name, value, assetPreviewUrl, onChange }: Imp
     search.onOpenChange(nextOpen);
     if (nextOpen) {
       setUploadError(null);
+      // 已上传资产只在用户展开编辑器时懒加载，避免导入列表每一行都打一次私有资产 API。
       void uploadedLogos.loadInitial();
       return;
     }
@@ -73,6 +87,7 @@ export function ImportLogoEditor({ name, value, assetPreviewUrl, onChange }: Imp
   const stageBlob = (blob: Blob, filename: string, previewUrl: string) => {
     setLocalPreview(previewUrl);
     setUploadError(null);
+    // 本地文件先作为 deferred asset 上抛；URL 写 null 是为了防止 data URL 被误当成已持久化 Logo。
     onChange(null, { blob, filename, previewUrl });
     handleOpenChange(false);
   };
@@ -92,6 +107,7 @@ export function ImportLogoEditor({ name, value, assetPreviewUrl, onChange }: Imp
       const result = reader.result;
       if (typeof result !== "string") return;
       if (isSvgImageMime(mimeType) || isIcoImageMime(mimeType)) {
+        // SVG/ICO 保留原始文件，避免导入页裁剪把矢量/多尺寸资源降级成单张 PNG。
         stageBlob(file, normalizedFilename(file.name, mimeType), result);
         return;
       }

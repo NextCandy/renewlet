@@ -39,6 +39,11 @@ const IMPORT_DATE_FIELD_KEYS: Record<string, MessageKey> = {
   wallosStartDate: "import.field.wallosStartDate",
 };
 
+/**
+ * formatImportMessage 将导入 warning/error code 转成本地化文案。
+ *
+ * 导入 payload 和服务端响应只保存稳定 code；这里是唯一展示翻译边界，避免解析层直接依赖 UI 文案。
+ */
 export function formatImportMessage(message: string, t: Translate): string {
   const parts = message.split("|");
   const code = parts[0] ?? "";

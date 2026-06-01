@@ -2,13 +2,17 @@
 /**
  * 部署脚本契约检查。
  *
+ * 触发时机：`pnpm check:deploy`、CI 质量门和发布前部署验证。
+ * 前置依赖：Node.js；安装 Docker Compose v2 时会额外检查 compose config，未安装时跳过该部分。
+ *
  * 架构位置：根 `check:deploy` 在 CI/本地检查一键部署脚本是否仍会生成必要密钥、
  * 保留已有配置，并在缺少 Docker 时给出可预测行为。
  *
  * 流程：
  *   临时目录 -> 假 docker -> 复制部署模板 -> 运行脚本 -> 检查 .env/compose
  *
- * 注意： 这里会创建临时文件但不改仓库；新增部署环境变量时要同步 env.example 和这些断言。
+ * 注意：这里会创建临时文件但不改仓库；每个临时目录都在 finally 清理。
+ * 新增部署环境变量时要同步 env.example 和这些断言。
  */
 import { spawnSync } from "node:child_process";
 import {

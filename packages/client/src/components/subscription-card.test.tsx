@@ -1,3 +1,4 @@
+// 订阅卡片测试保护有效状态、菜单操作和日历入口，避免列表页展示与 domain 状态计算分叉。
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";

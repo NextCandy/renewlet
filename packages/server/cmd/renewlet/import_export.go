@@ -1,5 +1,14 @@
 package main
 
+// import_export.go 实现 Renewlet/Wallos 导入预览与执行。
+//
+// 架构位置：
+//   - 前端先在浏览器本地解析文件，再把标准 importPayload 交给这里做用户隔离、冲突预览和写库。
+//   - extra.import 是跨 Go/PocketBase、Cloudflare Worker 与前端 shared schema 的幂等键事实来源。
+//   - apply 会重新 preview 并在事务内写 subscriptions/settings/custom_configs，避免 UI 预览被篡改后直接落库。
+//
+// 注意： 预览上限服务于冲突分析，执行上限服务于真实写库成本；两者不要合并成一个魔法数字。
+
 import (
 	"database/sql"
 	"encoding/json"

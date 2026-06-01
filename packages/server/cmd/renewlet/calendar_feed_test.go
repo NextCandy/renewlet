@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试日历 Feed 登录态管理 API 与公开 ICS token 路由的完整生命周期，防止 Go 后端和 Worker 行为分叉。
+
 import (
 	"encoding/json"
 	"net/http"

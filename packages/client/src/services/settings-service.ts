@@ -17,6 +17,11 @@ function clearLegacyWebhookExample(value: string, legacyExample: string) {
   return value.trim() === legacyExample ? "" : value;
 }
 
+/**
+ * 将远端 settings JSON 收敛为前端完整设置。
+ *
+ * 该函数同时服务 PocketBase JSON 字段和 Worker settings_json；不要在页面里绕过它直接消费远端值。
+ */
 export function normalizeSettings(value: unknown): AppSettings {
   const parsed = settingsUpdateBodySchema.safeParse(value);
   const defaults = { ...DEFAULT_SETTINGS, timezone: getSystemTimeZone("UTC") };
@@ -37,6 +42,7 @@ export function normalizeSettings(value: unknown): AppSettings {
   };
 }
 
+/** 设置服务按运行面分流读写，输出始终是前端 AppSettings 完整对象。 */
 export const settingsService = {
   async get(): Promise<AppSettings> {
     const userId = getCurrentUserId();

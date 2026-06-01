@@ -54,6 +54,8 @@ func (service *systemUpdateService) CheckVersion(ctx context.Context, locale app
 	return cloneSystemVersionResponse(response, false), nil
 }
 
+// PerformUpdate 下载稳定 Release、校验 checksum、替换真实二进制，并把退出动作延后到显式 restart。
+// 注意：这里不能在替换完成后立刻退出，否则前端拿不到 needsRestart 状态，也无法开始健康检查等待。
 func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale appLocale) (*systemUpdateResponse, error) {
 	if !service.beginUpdate() {
 		return nil, systemUpdateError{kind: errSystemUpdateInProgress, message: serverText(locale, "system.updateInProgress")}
@@ -125,6 +127,7 @@ func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale ap
 	}, nil
 }
 
+// ConfirmRestart 单次消费 restart pending，避免管理员之外的重复请求把当前进程当成通用 kill switch。
 func (service *systemUpdateService) ConfirmRestart(locale appLocale) error {
 	service.updateMu.Lock()
 	defer service.updateMu.Unlock()
@@ -135,6 +138,7 @@ func (service *systemUpdateService) ConfirmRestart(locale appLocale) error {
 	return nil
 }
 
+// ScheduleRestart 在响应写回后异步退出；Docker restart policy 负责用新二进制拉起进程。
 func (service *systemUpdateService) ScheduleRestart() {
 	if envBool("RENEWLET_SELF_UPDATE_DISABLE_EXIT", false) {
 		return
@@ -346,6 +350,7 @@ func selectSystemUpdateAssets(assets []githubAsset, version string) (githubAsset
 	return *archiveAsset, *checksumAsset, nil
 }
 
+// verifySystemUpdateChecksum 只信任同一 Release 附带的 checksums.txt，先验完整性再触碰 tar 内容。
 func verifySystemUpdateChecksum(archivePath string, archiveName string, checksumText []byte) error {
 	expected, err := checksumForArchive(archiveName, checksumText)
 	if err != nil {

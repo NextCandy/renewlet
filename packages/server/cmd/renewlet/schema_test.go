@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试 PocketBase schema 自愈和迁移收敛，确保 collection 字段、索引和历史 logo 数据保持当前正式契约。
+
 import (
 	"strings"
 	"testing"

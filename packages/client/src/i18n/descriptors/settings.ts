@@ -1,3 +1,4 @@
+// settings domain 聚合账号、主题、通知、日历 Feed 和系统更新文案，配合保存草稿状态机统一维护。
 import { msg } from "@lingui/core/macro";
 
 export const messages = [

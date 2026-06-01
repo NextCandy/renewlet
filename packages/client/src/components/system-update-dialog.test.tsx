@@ -1,3 +1,4 @@
+// 系统更新弹窗测试保护 Docker 页面内更新的 pending restart 状态流和 Cloudflare/source 禁用分支。
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

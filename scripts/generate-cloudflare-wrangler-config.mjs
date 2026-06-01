@@ -28,6 +28,7 @@ function requireEnv(name) {
 }
 
 function stripJsoncComments(input) {
+  // Wrangler 模板是 JSONC；CI 只需要解析并替换 binding 标识，不能引入额外依赖或执行任意 JS 配置。
   let output = "";
   let inString = false;
   let quote = "";
@@ -79,6 +80,7 @@ function stripJsoncComments(input) {
 function findBinding(config, key, binding) {
   const bindings = config[key];
   if (!Array.isArray(bindings)) throw new Error(`wrangler.jsonc must contain ${key}`);
+  // binding 名是 Worker 代码读取 env.DB/env.ASSETS_BUCKET 的契约；CI 只能替换资源 ID，不能改名。
   const match = bindings.find((item) => item && typeof item === "object" && item.binding === binding);
   if (!match) throw new Error(`wrangler.jsonc must contain ${binding} in ${key}`);
   return match;

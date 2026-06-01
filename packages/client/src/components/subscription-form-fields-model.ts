@@ -4,6 +4,7 @@ import type { CustomConfig } from "@/types/config";
 import type { SubscriptionFormState } from "@/types/subscription-form";
 
 export interface SubscriptionFormFieldsProps {
+  /** 同一页面可能同时渲染新增/编辑弹窗，id 前缀用于保持 label 与错误提示的 a11y 关联唯一。 */
   idPrefix: string;
   config: CustomConfig;
   formData: SubscriptionFormState;
@@ -16,6 +17,7 @@ export interface SubscriptionFormFieldsProps {
   notificationReminderDays: number;
 }
 
+/** 表单错误按 UI 区块聚合，而不是逐 DTO 字段暴露，避免跨字段日期和提醒规则在不同输入上重复显示。 */
 export type SubscriptionFormErrors = Partial<Record<
   "name" | "price" | "dates" | "customDays" | "reminderDays" | "website" | "tags",
   string
@@ -26,6 +28,7 @@ export type SubscriptionFormFieldUpdater = <K extends keyof SubscriptionFormStat
   value: SubscriptionFormState[K],
 ) => void;
 
+// 输入态字段到错误区块的唯一映射；onChange 清错和 submit 校验共用它，避免某些字段改动后旧错误残留。
 export const errorFieldByFormKey: Partial<Record<keyof SubscriptionFormState, keyof SubscriptionFormErrors>> = {
   name: "name",
   price: "price",

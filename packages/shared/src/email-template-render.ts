@@ -1,5 +1,11 @@
 import type { EmailTemplateData, EmailTemplateItem } from "./email-template";
 
+/**
+ * renderEmailTemplate 渲染通知邮件 HTML。
+ *
+ * 模板输出同时供 Cloudflare Worker 和 Go 邮件语义对齐；所有用户内容必须经过 escapeHtml/escapeAttr，
+ * 因为邮件客户端会执行各自的 HTML/CSS 兼容规则，不能依赖浏览器 CSP。
+ */
 export function renderEmailTemplate(data: EmailTemplateData): string {
   const groupsOrContent = data.groups.length > 0 ? renderGroups(data) : renderContentPanel(data);
   const cta = data.cta ? renderCta(data) : "";

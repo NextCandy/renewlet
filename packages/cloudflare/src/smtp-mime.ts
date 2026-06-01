@@ -1,5 +1,6 @@
 const MIME_BOUNDARY = "renewlet-notification-alternative";
 
+/** SMTP 发送层的窄邮件输入；HTML 和 Text 已由 shared 邮件模板生成。 */
 export interface SmtpEmail {
   to: string[];
   subject: string;
@@ -7,11 +8,13 @@ export interface SmtpEmail {
   html: string;
 }
 
+/** 已解析邮箱地址；raw 保留展示名用于 header，address 用于 SMTP envelope。 */
 export interface Mailbox {
   raw: string;
   address: string;
 }
 
+/** 组装 multipart/alternative 邮件，确保 Cloudflare 邮件与 Go 邮件保持同语义 fallback。 */
 export function composeEmail(email: SmtpEmail, from: Mailbox, to: Mailbox[], replyTo: Mailbox | null): string {
   const headers = [
     `From: ${formatMailboxHeader(from)}`,
@@ -26,6 +29,7 @@ export function composeEmail(email: SmtpEmail, from: Mailbox, to: Mailbox[], rep
   return `${headers.join("\r\n")}\r\n\r\n${composeAlternativeBody(email)}`;
 }
 
+/** SMTP DATA 阶段要求以额外点号转义正文行首点号，避免提前结束邮件体。 */
 export function dotStuff(value: string): string {
   return normalizeCrlf(value)
     .split("\r\n")

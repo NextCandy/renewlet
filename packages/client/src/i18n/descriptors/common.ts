@@ -1,3 +1,4 @@
+// common domain 只放跨页面复用文案；业务专有文案应留在各自 domain，避免 key 语义被滥用。
 import { msg } from "@lingui/core/macro";
 
 export const messages = [

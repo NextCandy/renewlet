@@ -1,3 +1,4 @@
+// 通知历史面板测试保护虚拟列表、详情展开和失败渠道展示，避免复杂 result union 被 UI 当成宽松对象。
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";

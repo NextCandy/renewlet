@@ -10,6 +10,12 @@ import {
 export type AppLocale = ServerI18nLocale;
 export { DEFAULT_SERVER_I18N_LOCALE };
 
+/**
+ * Worker 服务端文案使用生成 catalog，而不是复用前端 Lingui runtime。
+ *
+ * 这样 API 错误、Cron 和通知日志在无浏览器环境中也能稳定本地化，同时只向前端暴露稳定错误 code。
+ */
+
 const localeLookup = new Map<string, AppLocale>();
 for (const locale of SERVER_I18N_LOCALES) {
   const normalized = normalizeLocaleTag(locale);
@@ -37,6 +43,7 @@ export function normalizeServerLocale(value: string | null | undefined): AppLoca
   return matchServerLocale(value) ?? DEFAULT_SERVER_I18N_LOCALE;
 }
 
+/** requestLocale 优先读取前端随用户设置发送的显式 locale header。 */
 export function requestLocale(request: Request): AppLocale {
   const explicit = request.headers.get("x-renewlet-locale");
   if (explicit?.trim()) {
@@ -60,11 +67,13 @@ export function requestLocale(request: Request): AppLocale {
   return DEFAULT_SERVER_I18N_LOCALE;
 }
 
+/** serverText 返回服务端 catalog 文案；缺 key 时回 key，便于测试发现 catalog 漂移。 */
 export function serverText(locale: AppLocale, key: ServerI18nKey): string {
   const catalogs = SERVER_I18N_CATALOGS as Record<AppLocale, ServerI18nCatalog>;
   return catalogs[locale]?.[key] ?? catalogs[DEFAULT_SERVER_I18N_LOCALE][key] ?? key;
 }
 
+/** serverFormat 只做服务端错误/通知所需的命名占位替换，不引入前端 i18n runtime。 */
 export function serverFormat(locale: AppLocale, key: ServerI18nKey, params: Record<string, string | number>): string {
   return serverText(locale, key).replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name: string) => {
     const value = params[name];

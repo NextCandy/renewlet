@@ -59,9 +59,9 @@ interface SubscriptionCardProps {
   subscription: Subscription;
   /** 展示模式：grid（卡片）/ list（列表行）。 */
   viewMode?: 'grid' | 'list';
-  /** 点击“编辑”回调（传订阅 id）。 */
+  /** 编辑动作只传 id，页面控制器再从当前缓存快照取完整对象，避免卡片持有编辑弹窗状态。 */
   onEdit?: (id: string) => void;
-  /** 点击“删除确认”回调（传订阅 id）。 */
+  /** 删除动作只上抛 id，真正 mutation 和缓存失效统一留在页面应用层。 */
   onDelete?: (id: string) => void;
   /** 用户 IANA 时区，用于续费/试用提示窗口。 */
   timeZone: string;
@@ -115,13 +115,13 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
     daysUntilTrialEnd <= 3 && daysUntilTrialEnd >= 0;
   const inheritedReminderDays = settings?.notificationReminderDays ?? DEFAULT_NOTIFICATION_REMINDER_DAYS;
 
-  // 当 logo 变化时重置错误状态（例如用户从无效 URL 换成了有效 URL）
   useEffect(() => {
+    // Logo URL 可能由外链切换为私有资产；错误态必须跟随字段重置，不能让旧坏图污染新图。
     setLogoLoadFailed(false);
   }, [subscription.logo]);
 
-  /** 删除确认：触发回调并关闭弹窗。 */
   const handleDeleteConfirm = () => {
+    // 删除写入交给页面 mutation；卡片只关闭本地确认框，避免 mutation 失败后留下二次确认遮罩。
     onDelete?.(subscription.id);
     setShowDeleteDialog(false);
   };
@@ -138,7 +138,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
       )}
     >
       <div className="flex items-start gap-4">
-        {/* Logo（有则显示图片，否则显示订阅名称前 2 个字符作为占位） */}
         <div className={cn(
           "subscription-logo-tile flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border text-lg font-bold",
         )} style={logoTileStyle}>
@@ -154,7 +153,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
           )}
         </div>
 
-        {/* 内容 */}
         <div className="min-w-0 flex-1 grid gap-3">
           <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-x-3 gap-y-2">
             <TruncatedTooltipText
@@ -225,9 +223,7 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
             </div>
           </div>
 
-          {/* 日期信息 */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            {/* 开始日期 */}
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <CalendarClock className="h-3.5 w-3.5" />
               <span className="text-xs">
@@ -235,7 +231,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
               </span>
             </div>
             
-            {/* 下次账单信息 */}
             <div className={cn(
               "flex items-center gap-1.5",
               isExpired ? "text-destructive" : isRenewingSoon ? "text-warning" : "text-muted-foreground"
@@ -256,7 +251,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
               </span>
             </div>
 
-            {/* 带图标的付款方式 */}
             {subscription.paymentMethod && (() => {
               const paymentConfig = config.paymentMethods.find(
                 m => m.value === subscription.paymentMethod
@@ -273,7 +267,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
               );
             })()}
 
-            {/* 提醒设置，仅列表模式展示 */}
             {viewMode === 'list' && !isOneTime && (
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Bell className="h-3.5 w-3.5" />
@@ -286,7 +279,6 @@ export function SubscriptionCard({ subscription, viewMode = 'grid', onEdit, onDe
             )}
           </div>
 
-          {/* 试用提醒 */}
           {isTrialEndingSoon && subscription.trialEndDate && (
             <div className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
               <span className="font-medium">

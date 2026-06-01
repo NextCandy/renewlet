@@ -5,6 +5,7 @@ import { DEFAULT_CUSTOM_CONFIG, type CustomConfig } from "@/types/config";
 import { normalizeCustomConfig } from "@/modules/custom-config/domain/normalize-custom-config";
 import { isCloudflareRuntime } from "./runtime";
 
+/** 用户自定义分类/状态/支付方式服务；持久化前后都走 domain normalize，避免运行面漂移。 */
 export const customConfigService = {
   async get(): Promise<CustomConfig | null> {
     const userId = getCurrentUserId();

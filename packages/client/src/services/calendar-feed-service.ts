@@ -9,6 +9,12 @@ import {
   type SubscriptionCalendarFeedCreateResponse,
 } from "@/lib/api/schemas/calendar-feed";
 
+/**
+ * 日历订阅管理服务。
+ *
+ * 登录态接口只创建/撤销 feed 并返回可复制 URL；公开 ICS 拉取由 `/calendar/renewals.ics?token=...`
+ * 承担，前端不会持久化 token 字段本身。
+ */
 export const calendarFeedService = {
   async get(): Promise<CalendarFeedStatusResponse["calendarFeed"]> {
     const data = await apiFetch("/api/app/calendar-feed", calendarFeedStatusResponseSchema);

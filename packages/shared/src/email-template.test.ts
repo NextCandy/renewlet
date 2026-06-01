@@ -1,3 +1,4 @@
+// 共享邮件模板测试保护 Go/Worker 共同语义，避免两种运行面邮件正文和主题分叉。
 import { describe, expect, it } from "vitest";
 import { EMAIL_MAX_HTML_BYTES, buildNotificationEmail, type NotificationEmailMessage, type NotificationEmailSettings } from "./email-template";
 

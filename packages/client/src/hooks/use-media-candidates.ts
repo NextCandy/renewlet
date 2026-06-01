@@ -38,6 +38,12 @@ function filterBlocked(group: MediaCandidateGroup, blocked: ReadonlySet<string>)
   return { best, builtIn, favicon };
 }
 
+/**
+ * 管理媒体候选搜索弹层的异步状态。
+ *
+ * 图片加载失败、手动关闭和连续搜索都会改变候选集合；requestId + AbortController 共同防止旧请求
+ * 把过期候选写回当前弹层。
+ */
 export function useMediaCandidates(options: UseMediaCandidatesOptions): UseMediaCandidatesResult {
   const { kind, autoQuery, limit = 32, closeResetDelayMs = 0 } = options;
   const [open, setOpen] = useState(false);

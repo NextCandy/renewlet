@@ -1,3 +1,4 @@
+// 导入 Logo 编辑器测试保护“暂存资产先预览、apply 时再持久化”的导入边界。
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";

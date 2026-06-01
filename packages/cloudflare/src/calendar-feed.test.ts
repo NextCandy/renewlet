@@ -1,3 +1,4 @@
+// Worker 日历 Feed 测试保护 D1 token scope、公开 ICS 路由和撤销语义，必须与 Go 后端行为保持一致。
 import { describe, expect, it } from "vitest";
 import { createDefaultAppSettings } from "@renewlet/shared/settings-defaults";
 import type { SubscriptionRow, UserRow, Env, CalendarFeedRow, SessionAuthRow } from "./types";

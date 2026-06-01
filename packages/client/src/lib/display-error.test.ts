@@ -1,3 +1,4 @@
+// display-error 测试保护后端错误 code/fieldErrors 到用户提示的映射，避免 UI 重新解析宽松 error shape。
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api-client";
 import { genericLoginErrorMessage, getAuthDisplayMessage, getDisplayErrorMessage } from "./display-error";

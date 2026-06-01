@@ -13,6 +13,7 @@ const CHROME_RE = /\bChrome\/\d+/i;
 const CHROME_VARIANT_RE = /\b(?:EdgA|OPR|Firefox|SamsungBrowser|CriOS)\b/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** 把登录后展示的 http(s) feed URL 转为系统日历更容易接管的 webcal URL。 */
 export function toWebcalUrl(feedUrl: string): string {
   try {
     const url = new URL(feedUrl);
@@ -25,6 +26,7 @@ export function toWebcalUrl(feedUrl: string): string {
   }
 }
 
+/** 触发系统日历协议处理器；返回 href 便于测试和不支持 window.open 的环境兜底。 */
 export function openWebcalUrl(feedUrl: string): string {
   const href = toWebcalUrl(feedUrl);
   if (typeof window !== "undefined" && typeof window.open === "function") {
@@ -38,6 +40,7 @@ export function isAndroidChromeUserAgent(userAgent = typeof navigator === "undef
   return ANDROID_CHROME_RE.test(userAgent) && CHROME_RE.test(userAgent) && !CHROME_VARIANT_RE.test(userAgent);
 }
 
+/** Android Chrome 没有稳定 webcal 处理器时，用 calendar intent 预填一次性事件。 */
 export function buildAndroidCalendarIntentUrl(input: AndroidCalendarIntentInput): string {
   const startMs = dateOnlyToUtcStartMs(input.startDate);
   const endMs = dateOnlyToUtcStartMs(input.endDate ?? addDateOnly(input.startDate, { days: 1 }));

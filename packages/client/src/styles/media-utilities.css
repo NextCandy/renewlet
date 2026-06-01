@@ -1,3 +1,4 @@
+/* 媒体工具样式只服务 Logo/Icon/上传预览；透明棋盘和浅底策略是为了看清品牌资产，不跟随页面主题反色。 */
 @layer utilities {
   /* 缩略图用独立局部 token，避免上传预览为了透明棋盘污染全局主题色。 */
   .media-thumbnail-canvas {

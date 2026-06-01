@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试导入 preview/apply 的严格 JSON、用户隔离、幂等 importKey 和手动 skip 语义。
+
 import (
 	"encoding/json"
 	"fmt"

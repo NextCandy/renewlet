@@ -1,4 +1,6 @@
 #!/bin/sh
+# Docker 镜像入口：把历史 CMD/healthcheck 的 /renewlet 稳定路径桥接到可替换真实二进制。
+# 触发时机：容器启动；依赖 su-exec、/pb_data volume 和 /opt/renewlet/current/renewlet。
 set -e
 
 if [ "$#" -eq 0 ]; then
@@ -21,6 +23,7 @@ if [ "$(id -u)" = "0" ]; then
   chown -R renewlet:renewlet /pb_data /opt/renewlet
 
   if [ "$1" = "/renewlet" ]; then
+    # 默认 server 进程降权运行；显式执行其它命令时保留用户选择，方便调试/维护容器。
     exec su-exec renewlet "$@"
   fi
 fi

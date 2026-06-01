@@ -113,6 +113,8 @@ func createInitialSuperuserIfMissing(app core.App, email string, password string
 	return app.Save(superuser)
 }
 
+// hasNonInstallerSuperuser 判断是否已有用户掌控的 PocketBase superuser。
+// 默认 installer 邮箱只是 PocketBase 初始化哨兵，不能阻止 Renewlet 创建真正可登录的管理入口。
 func hasNonInstallerSuperuser(app core.App) (bool, error) {
 	total, err := app.CountRecords(core.CollectionNameSuperusers, dbx.Not(dbx.HashExp{
 		"email": core.DefaultInstallerEmail,
@@ -123,11 +125,13 @@ func hasNonInstallerSuperuser(app core.App) (bool, error) {
 	return total > 0, nil
 }
 
+// hasEnabledAdmin 判断产品侧是否已有可用管理员，供 setup route 做最终裁决。
 func hasEnabledAdmin(app core.App) bool {
 	users, err := app.FindAllRecords("users", dbx.HashExp{"role": "admin", "banned": false})
 	return err == nil && len(users) > 0
 }
 
+// enabledAdminCount 返回仍可登录的管理员数量，用于防止自锁。
 func enabledAdminCount(app core.App) int {
 	users, err := app.FindAllRecords("users", dbx.HashExp{"role": "admin", "banned": false})
 	if err != nil {
@@ -136,6 +140,8 @@ func enabledAdminCount(app core.App) int {
 	return len(users)
 }
 
+// preventLastAdminMutation 拦截降级、禁用当前账号或最后管理员的写入。
+// 该函数同时保护 API、SDK 和管理后台触发的 record save，不能只依赖 route 层。
 func preventLastAdminMutation(app core.App, current *core.Record, target *core.Record) error {
 	if current != nil && current.Id == target.Id && (target.GetString("role") != "admin" || target.GetBool("banned")) {
 		return errors.New("CURRENT_ACCOUNT_PROTECTED")
@@ -148,6 +154,8 @@ func preventLastAdminMutation(app core.App, current *core.Record, target *core.R
 	return nil
 }
 
+// preventUserDelete 拦截删除当前账号或最后管理员。
+// 删除会连带清理用户数据，因此必须在真正执行删除前做后端裁决。
 func preventUserDelete(app core.App, current *core.Record, target *core.Record) error {
 	if current != nil && current.Id == target.Id {
 		return errors.New("CURRENT_ACCOUNT_DELETE_PROTECTED")

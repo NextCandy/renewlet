@@ -1,3 +1,4 @@
+# Workspace 只纳入 packages/*，避免根脚本和部署文件被当成可发布包处理；allowBuilds 锁住需要 postinstall build 的依赖。
 packages:
   - "packages/*"
 allowBuilds:

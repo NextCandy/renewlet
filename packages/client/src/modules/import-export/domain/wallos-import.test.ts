@@ -1,3 +1,4 @@
+// Wallos 导入测试保护 JSON/API/ZIP/SQLite 多来源映射，避免低保真路径误标成高置信导入。
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CUSTOM_CONFIG } from "@/types/config";
 import { DEFAULT_SETTINGS } from "@/types/subscription";

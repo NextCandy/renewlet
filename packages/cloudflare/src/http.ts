@@ -5,6 +5,11 @@ const JSON_LIMIT_BYTES = 1 << 20;
 
 export { requestLocale, type AppLocale } from "./server-i18n";
 
+/**
+ * json 构造 Worker API 的统一 JSON 响应。
+ *
+ * 显式 nosniff 是因为同一路径既返回 JSON 又可能处理资产/ICS，浏览器不能根据内容猜测类型。
+ */
 export function json(value: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json; charset=utf-8");
@@ -12,18 +17,22 @@ export function json(value: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(value), { ...init, headers });
 }
 
+/** ok 是无额外字段的成功响应；需要业务状态时应使用专用 response schema。 */
 export function ok(status = 200): Response {
   return json({ ok: true }, { status });
 }
 
+/** errorResponse 保持前端 ApiError 可读的 message/code/details 结构。 */
 export function errorResponse(status: number, message: string, code?: string, details?: unknown): Response {
   return json({ message, ...(code ? { code } : {}), ...(details === undefined ? {} : { details }) }, { status });
 }
 
+/** methodNotAllowed 使用服务端 catalog，保证未命中 route 的错误也跟随请求 locale。 */
 export function methodNotAllowed(locale: AppLocale): Response {
   return errorResponse(405, serverText(locale, "common.methodNotAllowed"), "METHOD_NOT_ALLOWED");
 }
 
+/** privateShortCache 只用于带认证语义但可短暂复用的响应，不能套到公共 ICS 或私有资产读取上。 */
 export function privateShortCache(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("cache-control", "private, max-age=300");
@@ -32,6 +41,7 @@ export function privateShortCache(response: Response): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+/** 从 Authorization header 提取 Cloudflare session bearer token；Go/PocketBase token 不在这里解析。 */
 export function bearerToken(request: Request): string | null {
   const header = request.headers.get("authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
@@ -43,6 +53,12 @@ export function pathSegments(url: URL, prefix = "/api/app"): string[] {
   return path.split("/").filter(Boolean).map((part) => decodeURIComponent(part));
 }
 
+/**
+ * 读取并校验 JSON 请求体。
+ *
+ * Worker 没有 Go decoder 的 DisallowUnknownFields，因此必须依赖传入的 strict Zod schema
+ * 在边界拒绝未知字段，并用 1MiB 上限防止 JSON API 被大 body 拖垮。
+ */
 export async function readJson<Schema extends z.ZodType>(
   request: Request,
   schema: Schema,
@@ -85,6 +101,7 @@ export async function readOptionalJson<Schema extends z.ZodType>(
   schema: Schema,
   locale: AppLocale,
 ): Promise<z.infer<Schema>> {
+  // 手动运行通知等端点允许空 body；空值仍解析成 {}，让 schema 决定默认字段而不是 route 自己补。
   const text = await readLimitedText(request, locale, true);
   if (!text) return schema.parse({});
   return parseJsonText(text, schema, locale);
@@ -125,6 +142,7 @@ async function readRequestTextUpToLimit(request: Request, locale: AppLocale, lim
   return text + decoder.decode();
 }
 
+/** 结构化 HTTP 错误；前端 ApiError 会读取 code/details 来定位表单字段或展示通用错误。 */
 export class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -138,6 +156,7 @@ export class HttpError extends Error {
 }
 
 export function toResponse(error: unknown): Response {
+  // 未知异常只作为 500 返回；真正的字段级错误必须在边界处抛 HttpError，避免泄漏内部堆栈。
   if (error instanceof HttpError) return errorResponse(error.status, error.message, error.code, error.details);
   const message = error instanceof Error ? error.message : serverText(DEFAULT_SERVER_I18N_LOCALE, "common.internalError");
   return errorResponse(500, message || serverText(DEFAULT_SERVER_I18N_LOCALE, "common.internalError"), "INTERNAL_ERROR");

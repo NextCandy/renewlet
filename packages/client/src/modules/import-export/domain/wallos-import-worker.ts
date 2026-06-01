@@ -25,6 +25,8 @@ type WorkerResponse =
 
 const WALLOS_TABLE_PAGE_SIZE = 500;
 const WALLOS_TABLE_MAX_ROWS = 5000;
+
+// Wallos 备份解析运行在专用 Worker 内；容量上限保护浏览器内存，也和服务端导入预览 5000 条上限对齐。
 class WallosTableTooLargeError extends Error {
   constructor() {
     super(IMPORT_MESSAGE_CODES.wallosTableTooLarge);
@@ -69,6 +71,11 @@ const WALLOS_TABLE_COLUMNS = {
 } as const;
 type WallosTableName = keyof typeof WALLOS_TABLE_COLUMNS;
 
+/**
+ * Worker 消息入口。
+ *
+ * 主线程只传 ArrayBuffer 和映射上下文；Worker 返回 PreparedImport，不直接访问网络或 Renewlet API。
+ */
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
   void (async () => {

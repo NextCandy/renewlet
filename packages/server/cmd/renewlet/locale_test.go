@@ -1,5 +1,7 @@
 package main
 
+// 本文件测试服务端 locale 选择和 catalog 占位符，确保通知/错误文案不依赖前端运行时。
+
 import (
 	"net/http"
 	"testing"

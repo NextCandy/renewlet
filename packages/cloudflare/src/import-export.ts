@@ -41,6 +41,7 @@ const IMPORT_JSON_LIMIT_BYTES = 50 * 1024 * 1024;
 const IMPORT_WARNING_LOW_CONFIDENCE_KEY = "IMPORT_WARNING_LOW_CONFIDENCE_KEY";
 const IMPORT_WARNING_LOW_CONFIDENCE_NAME_MATCHED = "IMPORT_WARNING_LOW_CONFIDENCE_NAME_MATCHED";
 
+/** 导入预览只做当前用户范围内的冲突判断，不写 D1。 */
 export async function previewImport(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -50,6 +51,7 @@ export async function previewImport(request: Request, env: Env): Promise<Respons
   return json(importPreviewResponseSchema.parse(buildPreview(body.payload, body.conflictMode, existing, body.skipIndexes)));
 }
 
+/** 应用导入会重新计算 preview，避免客户端篡改 action 结果后直接写库。 */
 export async function applyImport(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);

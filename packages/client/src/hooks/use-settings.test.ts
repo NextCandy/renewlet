@@ -1,3 +1,4 @@
+// settings hook 测试保护 React Query 写缓存策略，避免保存后 UI 等待 refetch 时闪回旧设置。
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,

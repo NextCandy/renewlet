@@ -89,6 +89,12 @@ function normalizeSubscriptionRecord(row: unknown): unknown {
   return normalized;
 }
 
+/**
+ * 将任一运行面返回的订阅记录收敛成前端 domain 对象。
+ *
+ * PocketBase 原生 record 与 Cloudflare API response 都必须先通过 shared schema；
+ * React 层只看到 `Subscription` union，避免表单和统计逻辑按运行面分叉。
+ */
 export function fromApiSubscription(row: ApiSubscription | RecordModel): Subscription {
   const parsedRow = apiSubscriptionSchema.parse(normalizeSubscriptionRecord(row));
   const base = {
@@ -120,6 +126,12 @@ export function fromApiSubscription(row: ApiSubscription | RecordModel): Subscri
   return { ...base, billingCycle: parsedRow.billingCycle, customDays: undefined };
 }
 
+/**
+ * 生成订阅写入 payload。
+ *
+ * `null` 表示清空可选字段，`undefined` 表示字段缺席；这里主动使用 null，
+ * 防止 PocketBase patch 和 Worker JSON merge 对可选字段产生不同语义。
+ */
 export function toSubscriptionWritePayload(sub: SubscriptionDraft | Subscription) {
   return {
     name: sub.name,
@@ -183,6 +195,7 @@ export const subscriptionService = {
     for (;;) {
       const page = await this.listPage(cursor, SUBSCRIPTION_PAGE_SIZE);
       out.push(...page.subscriptions);
+      // 聚合列表主要给统计/导出使用；上限避免异常数据量让单页 UI 拉取变成无界循环。
       if (!page.nextCursor || out.length >= SUBSCRIPTION_AGGREGATE_LIMIT) return out.slice(0, SUBSCRIPTION_AGGREGATE_LIMIT);
       cursor = page.nextCursor;
     }

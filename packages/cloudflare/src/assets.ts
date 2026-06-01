@@ -8,6 +8,11 @@ import type { AssetRow, Env } from "./types";
 const MAX_ASSET_BYTES = 2 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"]);
 
+/**
+ * uploadAsset 接收当前用户上传的 Logo/Icon 私有资产。
+ *
+ * R2 只负责对象存储，D1 asset metadata 才是 owner、类型和可读取路径的权限事实来源。
+ */
 export async function uploadAsset(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -40,6 +45,11 @@ export async function uploadAsset(request: Request, env: Env): Promise<Response>
   return json({ url: `/api/app/assets/${id}` }, { status: 201 });
 }
 
+/**
+ * readAsset 通过受控 API 返回当前用户的私有资产。
+ *
+ * 读取顺序必须先校验 D1 owner 再访问 R2，不能把 R2 key 或公开 URL 暴露成绕过登录态的图片入口。
+ */
 export async function readAsset(request: Request, env: Env, id: string): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -62,6 +72,11 @@ export async function readAsset(request: Request, env: Env, id: string): Promise
   return new Response(object.body, { headers });
 }
 
+/**
+ * listUploadedAssets 分页列出当前用户可复用的上传资产。
+ *
+ * Logo 选择器会频繁打开该接口，分页和 perPage 上限保护 D1 查询成本，也避免跨用户资产枚举。
+ */
 export async function listUploadedAssets(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(request, env);
   const url = new URL(request.url);

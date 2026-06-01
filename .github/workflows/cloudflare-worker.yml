@@ -56,6 +56,7 @@ jobs:
       - name: Check deployment secrets
         id: deployment-secrets
         shell: bash
+        # fork/私有测试环境常缺远端 secrets；这里降级为 notice，保留构建检查但不碰真实 D1/R2。
         run: |
           set -euo pipefail
 

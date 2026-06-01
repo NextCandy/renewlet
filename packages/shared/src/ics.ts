@@ -1,5 +1,6 @@
 import ical, { ICalAlarmType, ICalCalendarMethod } from "ical-generator";
 
+/** ICS 中的单个续费事件；date 始终是 YYYY-MM-DD，不是 datetime。 */
 export interface RenewalCalendarEvent {
   uid: string;
   date: string;
@@ -10,6 +11,7 @@ export interface RenewalCalendarEvent {
   reminderDays?: number;
 }
 
+/** 生成 ICS 事件所需的订阅窄视图，避免日历模块依赖完整 API subscription。 */
 export interface RenewalCalendarSubscription {
   id: string;
   name: string;
@@ -87,6 +89,12 @@ export function buildRenewalCalendarEvent(options: RenewalCalendarEventMapperOpt
   return event;
 }
 
+/**
+ * 生成公开日历订阅内容。
+ *
+ * Renewlet 只导出当前 nextBillingDate 的全日事件，不写 RRULE；
+ * 续费算法仍由应用自己计算，外部日历只负责订阅展示。
+ */
 export function buildRenewalCalendarIcs(options: RenewalCalendarOptions): string {
   const calendar = ical({
     method: ICalCalendarMethod.PUBLISH,

@@ -19,6 +19,7 @@ import type { Env } from "./types";
 const builtInResolver = createMediaResolver(builtInIconsIndex as BuiltInIcon[], mediaResolverConfig);
 const mediaRateLimitData = new Map<string, { count: number; resetAt: number }>();
 
+/** Logo/Icon 候选搜索入口；鉴权、限流和来源设置在 Worker 边界处理，排序规则在 shared resolver。 */
 export async function mediaCandidates(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(request, env);
   const locale = requestLocale(request);

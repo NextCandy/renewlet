@@ -1,3 +1,4 @@
+// 订阅导出测试保护 CSV 公式注入防护和有效状态展示口径，JSON 备份仍保留原始字段。
 import { describe, expect, it } from "vitest";
 import { buildSubscriptionsCsv, escapeCsvCell } from "./subscription-export";
 import type { Subscription } from "@/types/subscription";

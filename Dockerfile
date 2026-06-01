@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
+# 构建链路：Node 阶段产出 Vite 静态资源，Go 阶段嵌入静态资源并生成单文件 server，runner 只保留运行依赖。
 FROM --platform=$BUILDPLATFORM node:24-alpine AS client-deps
 
 WORKDIR /app
@@ -20,6 +21,7 @@ RUN pnpm --filter @renewlet/client build
 
 FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS server-builder
 
+# Release workflow 和 Docker buildx 会注入这些元数据；页面内更新和版本弹窗都依赖 ldflags 中的值。
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG VERSION=0.0.0-dev
@@ -41,6 +43,7 @@ RUN mkdir -p /out /pb_data \
 
 FROM alpine:3.22 AS runner
 
+# GOMEMLIMIT 给小内存 VPS 留余量；自更新变量固定真实二进制和备份目录，不能指向 /renewlet symlink。
 ENV GOMEMLIMIT=128MiB \
   RENEWLET_SELF_UPDATE_ENABLED=true \
   RENEWLET_SELF_UPDATE_BINARY=/opt/renewlet/current/renewlet \
@@ -58,6 +61,7 @@ COPY --from=server-builder --chown=renewlet:renewlet /pb_data /pb_data
 COPY --from=server-builder --chown=renewlet:renewlet /out/renewlet /opt/renewlet/current/renewlet
 COPY --chmod=755 deploy/docker-entrypoint.sh /docker-entrypoint.sh
 
+# pb_data 同时保存 PocketBase SQLite、上传文件和迁移状态；升级/重建容器必须持久化这个卷。
 VOLUME ["/pb_data"]
 EXPOSE 3000
 

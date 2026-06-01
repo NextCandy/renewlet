@@ -47,8 +47,8 @@ export class ApiError extends Error {
   }
 }
 
+/** 请求级 fetch 配置；`timeoutMs` 只在本 client 内消费，不透传给浏览器 fetch。 */
 export type ApiFetchInit = RequestInit & {
-  // timeoutMs 是前端本地保护，不传给原生 fetch，避免不同运行时忽略未知字段。
   timeoutMs?: number;
 };
 

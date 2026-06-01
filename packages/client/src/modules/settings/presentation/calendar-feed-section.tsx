@@ -18,10 +18,15 @@ import { toWebcalUrl } from "@/shared/browser/calendar-links";
 import { LoadingButtonContent } from "./settings-shared-controls";
 
 interface CalendarFeedSectionProps {
+  /** 是否已有可用 feed；公开 ICS route 只认 URL 中的高熵 token，不读取登录态。 */
   enabled: boolean;
+  /** 当前用户可复制的 HTTPS 订阅 URL；为 null 时表示尚未生成或已撤销。 */
   feedUrl: string | null;
+  /** 首次读取 feed 状态中，用于统一禁用会改 token 的操作。 */
   isLoading: boolean;
+  /** 创建或重新生成 token 中；这两个动作都会让旧 URL 失效。 */
   isCreating: boolean;
+  /** 撤销 token 中；完成后公开 ICS URL 应返回同类 404。 */
   isDeleting: boolean;
   onCreate: () => void | Promise<void>;
   onCopy: () => void | Promise<void>;
@@ -29,6 +34,11 @@ interface CalendarFeedSectionProps {
   onRegenerate: () => void | Promise<void>;
 }
 
+/**
+ * 展示并管理全局日历订阅 URL。
+ *
+ * 注意：feed URL 是低权限 bearer secret；UI 只能复制/打开/撤销，不应把 token 拆出来展示或缓存到其它状态。
+ */
 export function CalendarFeedSection({
   enabled,
   feedUrl,

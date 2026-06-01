@@ -1,3 +1,4 @@
+// 管理员用户页测试保护前端防自锁 UX 和 admin API 调用形状；安全边界仍由后端 route 重复校验。
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,3 +1,4 @@
+// SpendingChart 测试保护首页分类支出口径，确保图表只统计有效活跃订阅和统一月折算金额。
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

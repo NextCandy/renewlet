@@ -5,6 +5,7 @@ import { serverText } from "./server-i18n";
 import { requireAuth } from "./auth";
 import type { Env, SubscriptionRow } from "./types";
 
+/** 读取当前用户订阅页；cursor 只决定分页位置，权限始终来自 Worker session。 */
 export async function readSubscriptions(request: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(request, env);
   const url = new URL(request.url);
@@ -25,6 +26,7 @@ export async function readSubscriptions(request: Request, env: Env): Promise<Res
   });
 }
 
+/** 新建订阅走 shared create schema，确保 D1 写入边界与 Go/PocketBase API 保持同形。 */
 export async function createSubscription(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -41,6 +43,7 @@ export async function createSubscription(request: Request, env: Env): Promise<Re
   return json({ subscription: toApiSubscription(row) }, { status: 201 });
 }
 
+/** 更新订阅先合并为完整 create body，再转换为 D1 row，模拟 PocketBase hook 的最终规范化效果。 */
 export async function updateSubscription(request: Request, env: Env, id: string): Promise<Response> {
   const locale = requestLocale(request);
   const auth = await requireAuth(request, env);
@@ -97,6 +100,7 @@ export async function deleteSubscription(request: Request, env: Env, id: string)
 
 export type SubscriptionBody = ReturnType<typeof subscriptionCreateBodySchema.parse>;
 
+/** 把 D1 row 还原成 shared 写入 body，用于 PATCH 合并而不是直接拼 SQL 字段。 */
 function toBody(row: SubscriptionRow): SubscriptionBody {
   return {
     name: row.name,
@@ -123,6 +127,7 @@ function toBody(row: SubscriptionRow): SubscriptionBody {
   };
 }
 
+/** 将 shared 订阅 body 映射到 D1 行；所有 snake_case、null 和整数布尔都集中在这里。 */
 export function toSubscriptionRow(
   id: string,
   userId: string,

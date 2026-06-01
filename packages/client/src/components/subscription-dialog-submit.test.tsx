@@ -1,3 +1,4 @@
+// 订阅弹窗提交测试保护上传中禁止保存、标签 pending 文本提交和一次性购买字段清理。
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";

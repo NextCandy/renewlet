@@ -55,6 +55,12 @@ class SmtpConnection {
     return await this.readResponse(expectedCodes, locale);
   }
 
+  /**
+   * 读取 SMTP 多行响应。
+   *
+   * SMTP 用 `250-...` 表示还有后续行、`250 ...` 表示结束；如果只读第一行会漏掉
+   * STARTTLS/AUTH 能力，从而误判服务器安全能力。
+   */
   async readResponse(expectedCodes: readonly number[], locale: AppLocale): Promise<SmtpResponse> {
     const lines: string[] = [];
     let code = 0;
@@ -71,6 +77,7 @@ class SmtpConnection {
   }
 
   async writeData(data: string): Promise<void> {
+    // DATA 阶段必须 dot-stuffing，否则正文里单独一行 "." 会被 SMTP 服务器当成邮件结束。
     await this.writeRaw(`${dotStuff(data)}\r\n.\r\n`);
   }
 
@@ -101,8 +108,8 @@ class SmtpConnection {
   }
 }
 
+/** 将账号级设置转换为 Cloudflare SMTP 配置；部署级 SMTP secrets 不参与 Worker 邮件通知。 */
 export function notificationSmtpConfig(settings: ApiAppSettings, locale: AppLocale): SmtpConfig {
-  // Cloudflare 部署面不再接受 SMTP secrets；邮件通知必须由当前账号在设置页显式配置。
   return buildSmtpConfig(
     settings.smtpHost,
     settings.smtpPort,
@@ -116,6 +123,11 @@ export function notificationSmtpConfig(settings: ApiAppSettings, locale: AppLoca
   );
 }
 
+/**
+ * 通过 Cloudflare TCP sockets 发送 SMTP 邮件。
+ *
+ * 连接先完成 EHLO/STARTTLS，再进行 AUTH 与 DATA；失败信息会被 publicSmtpError 清洗后返回给 UI。
+ */
 export async function sendSmtpEmail(config: SmtpConfig, email: SmtpEmail, locale: AppLocale): Promise<void> {
   const to = email.to.map((item) => parseMailbox(item, locale));
   if (to.length === 0) throw new Error(serverText(locale, "smtp.recipientEmpty"));

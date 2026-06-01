@@ -1,5 +1,9 @@
 package main
 
+// media_candidates.go 提供 Docker/Go 运行面的 Logo/Icon 候选解析 API。
+//
+// 架构位置：前端、导入预览和 Cloudflare Worker 都以 shared resolver 配置为事实源；
+// Go handler 只负责认证、严格请求体、用户设置读取和响应契约收敛，不在请求路径抓取外部 HTML。
 import (
 	"net/http"
 
@@ -11,11 +15,13 @@ func mediaCandidates(e *core.RequestEvent) error {
 	if e.Auth == nil {
 		return e.UnauthorizedError(serverText(locale, "auth.loginRequired"), nil)
 	}
+	// 候选请求可批量携带导入项；严格 decoder 能阻止旧 favicon-search 形状重新混进统一入口。
 	body, err := decodeStrictJSON[mediaCandidateResolveRequest](e.Request, locale)
 	if err != nil {
 		return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
 	}
 	if retryAfter := checkMediaCandidateRateLimit(e); retryAfter > 0 {
+		// Logo 搜索容易被输入联想连续触发；按会话限流可保护服务端 CPU，同时不影响静态内置索引读取。
 		setRetryAfter(e, retryAfter)
 		return e.JSON(http.StatusTooManyRequests, rateLimitedResponse{
 			Code:    "RATE_LIMITED",

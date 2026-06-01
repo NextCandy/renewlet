@@ -310,10 +310,10 @@ export const useExchangeRates = (preferredProvider: ExchangeRateProvider = DEFAU
   };
 
   /**
-   * 拉取汇率（可选强制刷新）。
+   * 汇率刷新入口。
    *
-   * - 默认优先读缓存
-   * - forceRefresh=true 时跳过缓存直接请求
+   * 同一 provider 的并发请求会合并；切换 provider 时旧请求会被 abort，保证设置页显示的来源
+   * 和统计页实际使用的汇率不会交叉回写。
    */
   const fetchRates = useCallback((
     forceRefresh = false,

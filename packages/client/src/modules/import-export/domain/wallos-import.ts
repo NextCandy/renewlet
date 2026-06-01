@@ -30,6 +30,15 @@ type WorkerResponse =
 const ZIP_CACHE = new WeakMap<File, Promise<JSZip>>();
 let workerRequestId = 0;
 
+/**
+ * parseImportFile 将用户选择的 Renewlet/Wallos 文件转换为待预览导入模型。
+ *
+ * 大文件只在浏览器本地解析或交给 Worker，不把用户的 Wallos 备份上传到服务端做格式探测。
+ *
+ * @param file 用户显式选择的 JSON/ZIP/SQLite 文件。
+ * @param context 当前自定义配置与默认值映射上下文。
+ * @param wallosUserId Wallos 多用户备份中被导入的用户 ID；未传时使用首个用户。
+ */
 export async function parseImportFile(
   file: File,
   context: ImportBuildBaseContext,
@@ -44,6 +53,11 @@ export async function parseImportFile(
   return parseJsonText(new TextDecoder().decode(bytes), context);
 }
 
+/**
+ * parseJsonText 解析纯文本导入内容。
+ *
+ * Renewlet export v1 是正式互导格式；Wallos 分支只做字段映射，旧 Renewlet legacy 分支是存量迁移桥。
+ */
 export async function parseJsonText(
   text: string,
   context: ImportBuildBaseContext,
@@ -84,6 +98,11 @@ export async function parseJsonText(
   throw new Error(IMPORT_MESSAGE_CODES.unrecognizedFile);
 }
 
+/**
+ * updatePreparedSubscriptionLogo 写入单条预览项的 Logo 覆盖。
+ *
+ * 导入资产引用与 payload logo 字段必须一起移动，避免用户在预览里替换 Logo 后仍上传旧 ZIP entry。
+ */
 export function updatePreparedSubscriptionLogo(
   prepared: PreparedImport,
   index: number,
@@ -101,6 +120,11 @@ export function updatePreparedSubscriptionLogo(
   };
 }
 
+/**
+ * updatePreparedSubscriptionLogos 批量写入 Logo 覆盖并维护自动匹配来源。
+ *
+ * auto match 只保留仍等于当前覆盖值的项；用户手动修改后不再把它当作自动匹配结果展示。
+ */
 export function updatePreparedSubscriptionLogos(
   prepared: PreparedImport,
   logoOverrides: ReadonlyMap<number, string | null>,
@@ -128,6 +152,11 @@ export function updatePreparedSubscriptionLogos(
   };
 }
 
+/**
+ * loadImportAssetBlob 从导入文件中延迟读取待上传资产。
+ *
+ * ZIP 解压结果按 File 弱缓存，避免用户批量导入 Logo 时为每个订阅重复解析同一个备份包。
+ */
 export async function loadImportAssetBlob(asset: ImportAssetRef): Promise<Blob> {
   if (asset.blob) return asset.blob;
   if (!asset.sourceFile || !asset.zipEntryName) throw new Error("Import asset is not available.");
@@ -137,6 +166,11 @@ export async function loadImportAssetBlob(asset: ImportAssetRef): Promise<Blob> 
   return await entry.async("blob");
 }
 
+/**
+ * resolveImportAssets 上传预览中最终会写入的 Logo，并把 payload 改写为受控资产 URL。
+ *
+ * 服务端 apply 只接受已经解析好的 `/api/app/assets/{id}` 或外链；这里必须在提交前完成私有资产落库。
+ */
 export async function resolveImportAssets(
   prepared: PreparedImport,
   previewItems: ImportPreviewItem[],
@@ -148,6 +182,7 @@ export async function resolveImportAssets(
   const logoOverrides = new Map<number, string | null>();
   let done = 0;
   onProgress?.(done, assets.length);
+  // 上传并发限制保护 Cloudflare R2/D1 与 PocketBase collection；导入几百个 Logo 时不能无界占满浏览器连接。
   await runWithConcurrency(assets, 3, async (asset) => {
     if (!prepared.payload.subscriptions[asset.subscriptionIndex]) return;
     const blob = await loadImportAssetBlob(asset);
