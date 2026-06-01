@@ -26,6 +26,7 @@ var (
 	errSystemUpdateUnsupported = errors.New("system update unsupported")
 	errSystemUpdateNoUpdate    = errors.New("system update no update")
 	errSystemUpdateInProgress  = errors.New("system update in progress")
+	errSystemRestartNotPending = errors.New("system restart not pending")
 	errSystemNoStableRelease   = errors.New("system update no stable release")
 
 	defaultSystemUpdateService = newSystemUpdateService(defaultSystemReleaseClient())
@@ -62,6 +63,7 @@ type systemUpdateService struct {
 
 	updateMu       sync.Mutex
 	updateInFlight bool
+	restartPending bool
 }
 
 type githubRelease struct {

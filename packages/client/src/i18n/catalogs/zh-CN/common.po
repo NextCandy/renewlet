@@ -39,11 +39,6 @@ msgid "system.runtime.docker"
 msgstr "Docker"
 
 #. js-lingui-explicit-id
-#: src/i18n/descriptors/common.ts:78
-msgid "system.restartDescription"
-msgstr "Docker restart 策略会拉起新版本；如果页面短暂断开，请稍后刷新。"
-
-#. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:82
 msgid "locale.enUS"
 msgstr "English"
@@ -169,6 +164,11 @@ msgid "system.releaseLink"
 msgstr "发布页"
 
 #. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:71
+msgid "system.viewChangelog"
+msgstr "查看更新日志"
+
+#. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:66
 msgid "system.updateAvailableTitle"
 msgstr "发现新版本"
@@ -181,7 +181,7 @@ msgstr "取消"
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:67
 msgid "system.updateAvailableDescription"
-msgstr "可以更新到 v{version}。更新会替换 Docker 运行二进制并自动重启。"
+msgstr "可以更新到 v{version}。更新会替换 Docker 运行二进制。"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:49
@@ -315,8 +315,8 @@ msgstr "更新失败，请稍后重试。"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:74
-msgid "system.updateStartedTitle"
-msgstr "更新已开始"
+msgid "system.updateComplete"
+msgstr "更新完成"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:45
@@ -420,8 +420,33 @@ msgstr "立即更新"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:77
-msgid "system.restartTitle"
-msgstr "等待自动重启"
+msgid "system.restartRequired"
+msgstr "请重启服务以应用更新"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:81
+msgid "system.restartNow"
+msgstr "立即重启"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:82
+msgid "system.restarting"
+msgstr "正在重启..."
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:77
+msgid "system.retry"
+msgstr "重试"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:78
+msgid "system.sourceMode"
+msgstr "源码构建"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:79
+msgid "system.sourceModeHint"
+msgstr "源码或非 Release 构建请使用原部署方式更新。"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:110

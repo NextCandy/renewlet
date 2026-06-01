@@ -242,6 +242,63 @@ func TestSystemUpdateRejectsConcurrentRun(t *testing.T) {
 	}
 }
 
+func TestSystemUpdateWaitsForExplicitRestart(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("self-update execution is only supported for linux Docker images")
+	}
+	release := &githubRelease{
+		TagName: "v9.9.9",
+		Assets: []githubAsset{
+			{Name: systemArchiveName("9.9.9"), BrowserDownloadURL: "https://github.com/zhiyingzzhou/renewlet/releases/download/v9.9.9/" + systemArchiveName("9.9.9")},
+			{Name: "checksums.txt", BrowserDownloadURL: "https://github.com/zhiyingzzhou/renewlet/releases/download/v9.9.9/checksums.txt"},
+		},
+	}
+	tempDir := t.TempDir()
+	binaryPath := filepath.Join(tempDir, "renewlet")
+	if err := os.WriteFile(binaryPath, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RENEWLET_SELF_UPDATE_ENABLED", "true")
+	t.Setenv("RENEWLET_SELF_UPDATE_BINARY", binaryPath)
+	t.Setenv("RENEWLET_SELF_UPDATE_BACKUP_DIR", filepath.Join(tempDir, "backups"))
+	oldVersion, oldBuildType := Version, BuildType
+	Version, BuildType = "1.0.0", "release"
+	t.Cleanup(func() {
+		Version, BuildType = oldVersion, oldBuildType
+	})
+
+	var exitCalled atomic.Bool
+	client := &fakeSystemReleaseClient{release: release}
+	service := newSystemUpdateService(client)
+	service.exit = func(int) { exitCalled.Store(true) }
+	service.downloadFnForTest("renewlet-new")
+
+	result, err := service.PerformUpdate(context.Background(), localeZhCN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.NeedsRestart {
+		t.Fatal("expected update to require restart")
+	}
+	if exitCalled.Load() {
+		t.Fatal("update should not exit before explicit restart")
+	}
+	if err := service.ConfirmRestart(localeZhCN); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ConfirmRestart(localeZhCN); !errors.Is(err, errSystemRestartNotPending) {
+		t.Fatalf("expected restart to be single-use, got %v", err)
+	}
+}
+
+func TestSystemRestartRejectedBeforeSuccessfulUpdate(t *testing.T) {
+	service := newSystemUpdateService(&fakeSystemReleaseClient{})
+	err := service.ConfirmRestart(localeZhCN)
+	if !errors.Is(err, errSystemRestartNotPending) {
+		t.Fatalf("ConfirmRestart error = %v, want restart not pending", err)
+	}
+}
+
 func (service *systemUpdateService) downloadFnForTest(binaryContent string) {
 	if fake, ok := service.client.(*fakeSystemReleaseClient); ok {
 		fake.downloadFn = func(targetPath string) error {

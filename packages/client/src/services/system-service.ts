@@ -1,7 +1,9 @@
 import { apiFetch } from "@/lib/api-client";
 import {
+  systemRestartResponseSchema,
   systemUpdateResponseSchema,
   systemVersionResponseSchema,
+  type SystemRestartResponse,
   type SystemUpdateResponse,
   type SystemVersionResponse,
 } from "@/lib/api/schemas/app";
@@ -17,6 +19,14 @@ export const systemService = {
       method: "POST",
       body: JSON.stringify({}),
       timeoutMs: 180_000,
+    });
+  },
+
+  async restart(): Promise<SystemRestartResponse> {
+    return await apiFetch("/api/app/admin/system/restart", systemRestartResponseSchema, {
+      method: "POST",
+      body: JSON.stringify({}),
+      timeoutMs: 10_000,
     });
   },
 };

@@ -1,15 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useState, type ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api-client";
-import { SystemUpdateDialog, SystemVersionBadge } from "./system-update-dialog";
+import { systemRestartBrowser, SystemUpdateDialog, SystemVersionBadge } from "./system-update-dialog";
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
-  toast: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
@@ -20,20 +19,19 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: mocks.toast }),
-}));
-
 vi.mock("@/i18n/I18nProvider", () => ({
   useI18n: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const messages: Record<string, string> = {
+        "common.close": "关闭",
         "system.badgeUpdate": "可更新到 v{version}",
         "system.badgeVersion": "v{version}",
         "system.buildType": "构建类型",
         "system.checking": "正在检查版本...",
         "system.checkDeferredDescription": "当前显示的是本机版本；请稍后重新检查。",
         "system.checkDeferredTitle": "暂时无法检查更新",
+        "system.checkFailedDescription": "请稍后重试，或打开 GitHub Release 手动查看。",
+        "system.checkFailedTitle": "版本检查失败",
         "system.currentVersion": "当前版本",
         "system.latestVersion": "最新版本",
         "system.noUpdateDescription": "当前部署不需要更新。",
@@ -41,22 +39,27 @@ vi.mock("@/i18n/I18nProvider", () => ({
         "system.openUpdateDialog": "打开系统更新",
         "system.recheck": "重新检查",
         "system.releaseLink": "发布页",
-        "system.restartDescription": "Docker restart 策略会拉起新版本；如果页面短暂断开，请稍后刷新。",
-        "system.restartTitle": "等待自动重启",
+        "system.restartNow": "立即重启",
+        "system.restartRequired": "请重启服务以应用更新",
+        "system.restarting": "正在重启...",
+        "system.retry": "重试",
         "system.runtime": "运行面",
         "system.runtime.docker": "Docker",
         "system.runtime.cloudflare": "Cloudflare",
         "system.runtime.source": "源码/手动部署",
+        "system.sourceMode": "源码构建",
+        "system.sourceModeHint": "源码或非 Release 构建请使用原部署方式更新。",
         "system.unsupportedDescription": "请使用原部署方式升级。",
         "system.unsupportedTitle": "当前部署不支持一键更新",
         "system.updateAvailableDescription": "可以更新到 v{version}。",
         "system.updateAvailableTitle": "发现新版本",
+        "system.updateComplete": "更新完成",
         "system.updateFailedDescription": "更新失败，请稍后重试。",
         "system.updateFailedTitle": "更新失败",
         "system.updateNow": "立即更新",
-        "system.updateStartedTitle": "更新已开始",
         "system.updateTitle": "系统更新",
         "system.updating": "更新中...",
+        "system.viewChangelog": "查看更新日志",
         "system.warningTitle": "检查提示",
       };
       let value = messages[key] ?? key;
@@ -65,7 +68,6 @@ vi.mock("@/i18n/I18nProvider", () => ({
       }
       return value;
     },
-    formatDateTime: (value: string) => value,
   }),
 }));
 
@@ -97,6 +99,13 @@ function versionFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function mockVersionEndpoint(overrides: Record<string, unknown> = {}) {
+  mocks.apiFetch.mockImplementation((input: string) => {
+    if (input.startsWith("/api/app/admin/system/version")) return Promise.resolve(versionFixture(overrides));
+    return Promise.reject(new Error(`Unexpected request ${input}`));
+  });
+}
+
 function renderWithQuery(ui: ReactElement) {
   const client = new QueryClient({
     defaultOptions: {
@@ -111,63 +120,186 @@ function renderWithQuery(ui: ReactElement) {
   );
 }
 
+function SystemUpdateHarness() {
+  const [open, setOpen] = useState(false);
+  return <SystemUpdateDialog open={open} onOpenChange={setOpen} />;
+}
+
 describe("SystemUpdateDialog", () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
-    mocks.toast.mockReset();
+    vi.restoreAllMocks();
   });
 
-  it("shows update details and triggers update", async () => {
-    mocks.apiFetch.mockImplementation((input: string, _schema: unknown, init?: RequestInit) => {
-      if (input.startsWith("/api/app/admin/system/version")) return Promise.resolve(versionFixture());
-      if (input === "/api/app/admin/system/update" && init?.method === "POST") {
-        return Promise.resolve({ ok: true, currentVersion: "1.0.0", targetVersion: "1.1.0", needsRestart: true, message: "更新已完成" });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("opens the version popover and refreshes with force=true", async () => {
+    mockVersionEndpoint();
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    expect(await screen.findByText("可更新到 v1.1.0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "打开系统更新" }));
+    expect(await screen.findByText("当前版本")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "重新检查" }));
+
+    await waitFor(() => expect(mocks.apiFetch).toHaveBeenCalledWith(expect.stringContaining("force=true"), expect.anything(), expect.anything()));
+  });
+
+  it("shows up-to-date state with a check mark and disables update action", async () => {
+    mockVersionEndpoint({
+      latestVersion: "1.0.0",
+      hasUpdate: false,
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+
+    expect(await screen.findByText("当前部署不需要更新。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "立即更新" })).not.toBeInTheDocument();
+  });
+
+  it("shows checking state while the popover version query is pending", async () => {
+    let resolveVersion: (value: ReturnType<typeof versionFixture>) => void = () => {};
+    mocks.apiFetch.mockImplementation((input: string) => {
+      if (input.startsWith("/api/app/admin/system/version")) {
+        return new Promise((resolve) => {
+          resolveVersion = resolve;
+        });
       }
       return Promise.reject(new Error(`Unexpected request ${input}`));
     });
 
     const user = userEvent.setup();
-    renderWithQuery(<SystemUpdateDialog open onOpenChange={vi.fn()} />);
+    renderWithQuery(<SystemUpdateHarness />);
 
-    expect(await screen.findByText("发现新版本")).toBeInTheDocument();
-    expect(screen.getByText("Renewlet 1.1.0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "打开系统更新" }));
 
-    await user.click(screen.getByRole("button", { name: "立即更新" }));
+    expect(await screen.findByText("正在检查版本...")).toBeInTheDocument();
 
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "更新已开始" })));
-    expect(apiFetch).toHaveBeenCalledWith("/api/app/admin/system/update", expect.anything(), expect.objectContaining({ method: "POST" }));
+    resolveVersion(versionFixture());
   });
 
-  it("disables update when runtime is unsupported", async () => {
-    mocks.apiFetch.mockResolvedValueOnce(versionFixture({
-      hasUpdate: false,
-      runtime: "cloudflare",
-      updateSupported: false,
-      unsupportedReason: "Cloudflare 不支持",
-      releaseInfo: null,
-    }));
+  it("updates release builds and then shows restart flow", async () => {
+    mocks.apiFetch.mockImplementation((input: string, _schema: unknown, init?: RequestInit) => {
+      if (input.startsWith("/api/app/admin/system/version")) return Promise.resolve(versionFixture());
+      if (input === "/api/app/admin/system/update" && init?.method === "POST") {
+        return Promise.resolve({ ok: true, currentVersion: "1.0.0", targetVersion: "1.1.0", needsRestart: true, message: "更新完成" });
+      }
+      return Promise.reject(new Error(`Unexpected request ${input}`));
+    });
 
-    renderWithQuery(<SystemUpdateDialog open onOpenChange={vi.fn()} />);
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+    await user.click(await screen.findByRole("button", { name: "立即更新" }));
+
+    expect(await screen.findByText("更新完成")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "立即重启" })).toBeInTheDocument();
+  });
+
+  it("shows unsupported source builds with source update hint", async () => {
+    mockVersionEndpoint({
+      hasUpdate: false,
+      runtime: "source",
+      updateSupported: false,
+      unsupportedReason: "源码构建不支持",
+      releaseInfo: null,
+      build: {
+        version: "1.0.0",
+        commit: "abc",
+        buildTime: "2026-05-26T00:00:00Z",
+        buildType: "source",
+      },
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
 
     expect(await screen.findByText("当前部署不支持一键更新")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "立即更新" })).toBeDisabled();
+    expect(screen.getByText("源码或非 Release 构建请使用原部署方式更新。")).toBeInTheDocument();
+  });
+
+  it("shows update error and retry button", async () => {
+    mocks.apiFetch.mockImplementation((input: string, _schema: unknown, init?: RequestInit) => {
+      if (input.startsWith("/api/app/admin/system/version")) return Promise.resolve(versionFixture());
+      if (input === "/api/app/admin/system/update" && init?.method === "POST") {
+        return Promise.reject(new Error("下载失败"));
+      }
+      return Promise.reject(new Error(`Unexpected request ${input}`));
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+    await user.click(await screen.findByRole("button", { name: "立即更新" }));
+
+    expect(await screen.findByText("更新失败")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
+
+  it("restarts and reloads after health check recovers", async () => {
+    const reload = vi.fn();
+    vi.spyOn(systemRestartBrowser, "reload").mockImplementation(reload);
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue({ ok: true } as Response);
+    mocks.apiFetch.mockImplementation((input: string, _schema: unknown, init?: RequestInit) => {
+      if (input.startsWith("/api/app/admin/system/version")) return Promise.resolve(versionFixture());
+      if (input === "/api/app/admin/system/update" && init?.method === "POST") {
+        return Promise.resolve({ ok: true, currentVersion: "1.0.0", targetVersion: "1.1.0", needsRestart: true, message: "更新完成" });
+      }
+      if (input === "/api/app/admin/system/restart" && init?.method === "POST") return Promise.resolve({ ok: true });
+      return Promise.reject(new Error(`Unexpected request ${input}`));
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+    await user.click(await screen.findByRole("button", { name: "立即更新" }));
+    const restartButton = await screen.findByRole("button", { name: "立即重启" });
+
+    vi.useFakeTimers();
+    fireEvent.click(restartButton);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("button", { name: /正在重启/ })).toBeDisabled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8_000);
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/app/health", { cache: "no-cache" });
+    expect(reload).toHaveBeenCalled();
   });
 
   it("shows a deferred check state without claiming the deployment is current", async () => {
-    mocks.apiFetch.mockResolvedValueOnce(versionFixture({
+    mockVersionEndpoint({
       latestVersion: "1.0.0",
       hasUpdate: false,
       checkSucceeded: false,
       releaseInfo: null,
       warning: "GitHub API 临时限流，请稍后重新检查。",
-    }));
+    });
 
-    renderWithQuery(<SystemUpdateDialog open onOpenChange={vi.fn()} />);
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
 
-    expect(await screen.findByText("暂时无法检查更新")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+
+    await screen.findByText("GitHub API 临时限流，请稍后重新检查。");
     expect(screen.getByText("GitHub API 临时限流，请稍后重新检查。")).toBeInTheDocument();
-    expect(screen.queryByText("已是最新版本")).not.toBeInTheDocument();
-    expect(screen.queryByText("检查 GitHub Release，并在支持的 Docker 部署中一键替换运行二进制。")).not.toBeInTheDocument();
   });
 });
 

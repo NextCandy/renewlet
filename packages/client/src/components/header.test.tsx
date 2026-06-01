@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   useSystemVersion: vi.fn(),
   useSystemUpdate: vi.fn(),
+  useSystemRestart: vi.fn(),
   toast: vi.fn(),
   setTheme: vi.fn(),
   writeAppearancePendingToStorage: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/auth-client", () => ({
 vi.mock("@/hooks/use-system-version", () => ({
   useSystemVersion: mocks.useSystemVersion,
   useSystemUpdate: mocks.useSystemUpdate,
+  useSystemRestart: mocks.useSystemRestart,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -68,10 +70,28 @@ vi.mock("@/i18n/I18nProvider", () => ({
         "system.noUpdateTitle": "已是最新版本",
         "system.openUpdateDialog": "打开系统更新",
         "system.recheck": "重新检查",
+        "system.releaseLink": "发布页",
+        "system.restartNow": "立即重启",
+        "system.restartRequired": "请重启服务以应用更新",
+        "system.restarting": "正在重启...",
+        "system.retry": "重试",
         "system.runtime": "运行面",
+        "system.runtime.cloudflare": "Cloudflare",
         "system.runtime.docker": "Docker",
+        "system.runtime.source": "源码/手动部署",
+        "system.sourceMode": "源码构建",
+        "system.sourceModeHint": "源码或非 Release 构建请使用原部署方式更新。",
+        "system.unsupportedDescription": "请使用原部署方式升级。",
+        "system.unsupportedTitle": "当前部署不支持一键更新",
+        "system.updateAvailableDescription": "可以更新到 v{version}。",
+        "system.updateAvailableTitle": "发现新版本",
+        "system.updateComplete": "更新完成",
+        "system.updateFailedDescription": "更新失败，请稍后重试。",
+        "system.updateFailedTitle": "更新失败",
         "system.updateNow": "立即更新",
         "system.updateTitle": "系统更新",
+        "system.updating": "更新中...",
+        "system.viewChangelog": "查看更新日志",
       };
       let value = messages[key] ?? key;
       for (const [name, param] of Object.entries(params ?? {})) {
@@ -137,6 +157,7 @@ describe("Header system version entry", () => {
     mocks.signOut.mockReset();
     mocks.useSystemVersion.mockReset();
     mocks.useSystemUpdate.mockReset();
+    mocks.useSystemRestart.mockReset();
     mocks.toast.mockReset();
     mocks.setTheme.mockReset();
     mocks.writeAppearancePendingToStorage.mockReset();
@@ -151,6 +172,13 @@ describe("Header system version entry", () => {
       isPending: false,
       isSuccess: false,
       mutateAsync: vi.fn(),
+      reset: vi.fn(),
+      data: undefined,
+    });
+    mocks.useSystemRestart.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn(),
+      reset: vi.fn(),
     });
   });
 
@@ -163,7 +191,7 @@ describe("Header system version entry", () => {
     await user.click(screen.getByRole("button", { name: "打开系统更新" }));
 
     expect(screen.getByText("可更新到 v1.1.0")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveTextContent("系统更新");
+    expect(screen.getByText("当前版本")).toBeInTheDocument();
   });
 
   it("hides the version badge from non-admin users", () => {

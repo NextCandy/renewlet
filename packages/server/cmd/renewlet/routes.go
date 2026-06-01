@@ -163,6 +163,20 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 		if err := e.JSON(http.StatusOK, result); err != nil {
 			return err
 		}
+		return nil
+	})
+	admin.POST("/system/restart", func(e *core.RequestEvent) error {
+		locale := requestLocale(e.Request)
+		if _, err := decodeStrictJSON[systemRestartRequest](e.Request, locale); err != nil {
+			return e.BadRequestError(validationErrorMessage(locale, "common.invalidRequestBody", err), err)
+		}
+		if err := defaultSystemUpdateService.ConfirmRestart(locale); err != nil {
+			return e.BadRequestError(err.Error(), nil)
+		}
+		if err := e.JSON(http.StatusOK, newOKResponse()); err != nil {
+			return err
+		}
+		// 只在管理员显式确认后退出，确保前端能先展示“更新完成”并开始等待健康检查恢复。
 		defaultSystemUpdateService.ScheduleRestart()
 		return nil
 	})

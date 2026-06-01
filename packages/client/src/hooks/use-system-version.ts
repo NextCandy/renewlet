@@ -19,8 +19,14 @@ export function useSystemUpdate() {
   return useMutation({
     mutationFn: () => systemService.update(),
     onSuccess: () => {
-      // 更新成功后旧进程即将退出，先清版本缓存，重启完成后的下一次查询必须重新命中新进程。
+      // 更新完成只代表二进制已替换；重启由小弹窗显式触发，缓存必须先失效以免继续展示旧 Release 状态。
       void queryClient.invalidateQueries({ queryKey: systemVersionQueryKey });
     },
+  });
+}
+
+export function useSystemRestart() {
+  return useMutation({
+    mutationFn: () => systemService.restart(),
   });
 }

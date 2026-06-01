@@ -115,6 +115,7 @@ func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale ap
 	}
 
 	service.clearCache()
+	service.markRestartPending()
 	return &systemUpdateResponse{
 		OK:             true,
 		CurrentVersion: Version,
@@ -124,12 +125,22 @@ func (service *systemUpdateService) PerformUpdate(ctx context.Context, locale ap
 	}, nil
 }
 
+func (service *systemUpdateService) ConfirmRestart(locale appLocale) error {
+	service.updateMu.Lock()
+	defer service.updateMu.Unlock()
+	if !service.restartPending {
+		return systemUpdateError{kind: errSystemRestartNotPending, message: serverText(locale, "system.restartNotPending")}
+	}
+	service.restartPending = false
+	return nil
+}
+
 func (service *systemUpdateService) ScheduleRestart() {
 	if envBool("RENEWLET_SELF_UPDATE_DISABLE_EXIT", false) {
 		return
 	}
 	go func() {
-		// 响应已经写回浏览器后再退出；Docker restart 策略负责把新二进制作为唯一运行面拉起。
+		// 重启请求响应已经写回浏览器后再退出；Docker restart 策略负责把新二进制作为唯一运行面拉起。
 		time.Sleep(service.restartWait)
 		service.exit(0)
 	}()
@@ -250,6 +261,13 @@ func (service *systemUpdateService) endUpdate() {
 	service.updateMu.Lock()
 	defer service.updateMu.Unlock()
 	service.updateInFlight = false
+}
+
+func (service *systemUpdateService) markRestartPending() {
+	service.updateMu.Lock()
+	defer service.updateMu.Unlock()
+	// 更新请求已经替换真实二进制，但旧进程仍服务当前页面；显式 pending 防止普通 restart 请求变成任意退出开关。
+	service.restartPending = true
 }
 
 func selfUpdateCapability(locale appLocale) systemUpdateCapability {

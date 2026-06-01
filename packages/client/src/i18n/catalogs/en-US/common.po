@@ -39,11 +39,6 @@ msgid "system.runtime.docker"
 msgstr "Docker"
 
 #. js-lingui-explicit-id
-#: src/i18n/descriptors/common.ts:78
-msgid "system.restartDescription"
-msgstr "The Docker restart policy will start the new version. If the page disconnects briefly, refresh it after a moment."
-
-#. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:82
 msgid "locale.enUS"
 msgstr "English"
@@ -169,6 +164,11 @@ msgid "system.releaseLink"
 msgstr "Release page"
 
 #. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:71
+msgid "system.viewChangelog"
+msgstr "View changelog"
+
+#. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:66
 msgid "system.updateAvailableTitle"
 msgstr "New version available"
@@ -181,7 +181,7 @@ msgstr "Cancel"
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:67
 msgid "system.updateAvailableDescription"
-msgstr "You can update to v{version}. The update replaces the Docker runtime binary and restarts automatically."
+msgstr "You can update to v{version}. The update replaces the Docker runtime binary."
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:49
@@ -315,8 +315,8 @@ msgstr "Update failed. Please try again later."
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:74
-msgid "system.updateStartedTitle"
-msgstr "Update started"
+msgid "system.updateComplete"
+msgstr "Update complete"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:45
@@ -420,8 +420,33 @@ msgstr "Update now"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:77
-msgid "system.restartTitle"
-msgstr "Waiting for automatic restart"
+msgid "system.restartRequired"
+msgstr "Restart the service to apply the update"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:81
+msgid "system.restartNow"
+msgstr "Restart now"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:82
+msgid "system.restarting"
+msgstr "Restarting..."
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:77
+msgid "system.retry"
+msgstr "Retry"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:78
+msgid "system.sourceMode"
+msgstr "Source build"
+
+#. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:79
+msgid "system.sourceModeHint"
+msgstr "Use the original deployment method for source or non-release builds."
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:110

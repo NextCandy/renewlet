@@ -165,6 +165,9 @@ type passwordResetStatusResponse struct {
 // systemUpdateRequest 是管理员触发页面内更新的空请求体；保留严格 JSON 边界来拒绝意外字段。
 type systemUpdateRequest struct{}
 
+// systemRestartRequest 是管理员确认应用已替换二进制后的显式重启请求。
+type systemRestartRequest struct{}
+
 // calendarFeedCreateRequest 只允许空对象，用于显式拒绝前端/客户端误传 token 等敏感字段。
 type calendarFeedCreateRequest struct{}
 
@@ -208,7 +211,7 @@ type systemVersionResponse struct {
 	Build             systemBuildInfo       `json:"build"`
 }
 
-// systemUpdateResponse 表示二进制已经替换完成，进程即将退出并交给 Docker restart 策略拉起。
+// systemUpdateResponse 表示二进制已经替换完成，等待管理员在前端确认重启。
 type systemUpdateResponse struct {
 	OK             bool   `json:"ok"`
 	CurrentVersion string `json:"currentVersion"`

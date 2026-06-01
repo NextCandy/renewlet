@@ -96,6 +96,9 @@ async function routeApp(request: Request, env: Env, url: URL): Promise<Response>
   if (head === "admin" && second === "system" && third === "update") {
     return routeMethods(request, { POST: () => systemUpdate(request, env) });
   }
+  if (head === "admin" && second === "system" && third === "restart") {
+    return routeMethods(request, { POST: () => systemUpdate(request, env) });
+  }
 
   if (head === "settings") return routeMethods(request, {
     GET: () => readSettings(request, env),

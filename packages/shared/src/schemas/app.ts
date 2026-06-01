@@ -63,8 +63,11 @@ export const systemUpdateResponseSchema = z.object({
   message: z.string().min(1),
 }).strict();
 
+export const systemRestartResponseSchema = okResponseSchema;
+
 export type SetupStatusResponse = z.infer<typeof setupStatusResponseSchema>;
 export type PasswordResetStatusResponse = z.infer<typeof passwordResetStatusResponseSchema>;
 export type SystemRuntime = z.infer<typeof systemRuntimeSchema>;
 export type SystemVersionResponse = z.infer<typeof systemVersionResponseSchema>;
 export type SystemUpdateResponse = z.infer<typeof systemUpdateResponseSchema>;
+export type SystemRestartResponse = z.infer<typeof systemRestartResponseSchema>;
