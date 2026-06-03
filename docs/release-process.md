@@ -7,6 +7,7 @@ Renewlet uses a tag-driven release process. `dev` is the integration branch, `ma
 - `CI`: public quality gate. It needs no secrets and works for forks and PRs.
 - `Build Smoke`: public build smoke test. It needs no secrets, validates Docker build and Cloudflare build, and never pushes or deploys.
 - `Cloudflare Worker`: self-managed Worker deployment for fork users or maintainer test environments. It skips remote deployment when Cloudflare secrets are missing; once secrets exist, it applies D1 migrations and deploys the Worker.
+- `Docker Hub Overview`: manual metadata sync for the official Docker Hub page. It does not build or push images.
 - `Maintainer Release`: the only manual maintainer release workflow. Use `action=prepare|rc|promote` to choose the stage.
 - `Release Publish`: tag-driven official publishing workflow for `v*.*.*` tags. It handles Docker images, GitHub Releases, and the production Cloudflare approval chain.
 
@@ -14,7 +15,9 @@ Official Docker publishing and production Cloudflare deploys live inside `Releas
 
 ## Docker Hub Overview
 
-Docker Hub does not populate the repository Overview from image pushes. `Release Publish` updates the Docker Hub short description and Overview after the official image push succeeds, using `README.md` as the source.
+Docker Hub does not populate the repository Overview from image pushes, and it does not resolve GitHub-style relative links in README content. `Release Publish` updates the Docker Hub short description and Overview after the official image push succeeds by generating a Docker Hub-specific README from `README.md` with absolute GitHub and raw asset URLs.
+
+Use the manual `Docker Hub Overview` workflow when the Overview needs to be refreshed without publishing a new RC or stable image. The manual workflow runs the same generator and updates only Docker Hub repository metadata; it does not build, tag, push, or deploy anything.
 
 Keep repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` configured before publishing RC or stable tags. The token must be able to push `zhiyingzzhou/renewlet` and update repository metadata, because the same release job handles both image upload and Overview synchronization.
 
