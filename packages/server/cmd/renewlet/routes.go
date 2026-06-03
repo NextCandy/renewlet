@@ -109,6 +109,10 @@ func registerRoutes(app core.App, router *router.Router[*core.RequestEvent]) {
 			}
 		}
 		if body.NewPassword != nil {
+			if e.Auth != nil && e.Auth.Id == user.Id {
+				// 自己改密码必须走 /account/password 校验当前密码，不能让管理员 patch 成为弱认证入口。
+				return e.BadRequestError(serverText(locale, "auth.selfPasswordResetForbidden"), nil)
+			}
 			user.SetPassword(*body.NewPassword)
 		}
 		// 防自锁保护放在 Save 前，避免当前管理员把自己降级/禁用后无法恢复系统。

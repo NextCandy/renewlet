@@ -506,6 +506,62 @@ func TestAdminPatchUserRejectsStrictJSONViolations(t *testing.T) {
 	}
 }
 
+func TestAdminPatchUserPasswordResetBoundary(t *testing.T) {
+	app := newSchemaTestApp(t)
+	if err := ensureSchema(app); err != nil {
+		t.Fatal(err)
+	}
+	admin, token := createRouteTestUser(t, app, "admin")
+	editable, _ := createRouteTestUser(t, app, "user")
+
+	res := serveTestRequest(t, app, http.MethodPatch, "/api/app/admin/users/"+editable.Id, `{"newPassword":"newpassword123"}`, token)
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected admin to reset another user's password, got %d: %s", res.Code, res.Body.String())
+	}
+	reloadedEditable, err := app.FindRecordById("users", editable.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloadedEditable.ValidatePassword("newpassword123") {
+		t.Fatal("expected admin patch to update another user's password")
+	}
+
+	res = serveTestRequest(t, app, http.MethodPatch, "/api/app/admin/users/"+admin.Id, `{"newPassword":"selfpassword123"}`, token)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected self password reset through admin patch to return 400, got %d: %s", res.Code, res.Body.String())
+	}
+	reloadedAdmin, err := app.FindRecordById("users", admin.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloadedAdmin.ValidatePassword("password123") {
+		t.Fatal("expected rejected self reset to keep the old password")
+	}
+	if reloadedAdmin.ValidatePassword("selfpassword123") {
+		t.Fatal("expected rejected self reset not to store the new password")
+	}
+}
+
+func TestAccountPasswordRouteRequiresCurrentPassword(t *testing.T) {
+	app := newSchemaTestApp(t)
+	if err := ensureSchema(app); err != nil {
+		t.Fatal(err)
+	}
+	user, token := createRouteTestUser(t, app, "user")
+
+	res := serveTestRequest(t, app, http.MethodPut, "/api/app/account/password", `{"currentPassword":"wrongpassword","newPassword":"newpassword123"}`, token)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected wrong current password to return 400, got %d: %s", res.Code, res.Body.String())
+	}
+	reloadedUser, err := app.FindRecordById("users", user.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloadedUser.ValidatePassword("password123") {
+		t.Fatal("expected wrong current password to keep the old password")
+	}
+}
+
 func TestNotificationHistoryRouteSortsByCreatedField(t *testing.T) {
 	app := newSchemaTestApp(t)
 	if err := ensureSchema(app); err != nil {

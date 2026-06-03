@@ -30,6 +30,7 @@
   "auth.invalidEmailOrPassword": "邮箱或密码不正确",
   "auth.loginRequired": "请先登录",
   "auth.passwordUpdateFailed": "密码更新失败",
+  "auth.selfPasswordResetForbidden": "请通过修改密码入口更新当前账号密码",
   "auth.sessionExpired": "登录已失效",
   "auth.setupAlreadyInitialized": "系统已初始化",
   "auth.setupDisabled": "初始化已关闭",

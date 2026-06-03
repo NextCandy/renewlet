@@ -189,6 +189,10 @@ export async function adminPatchUser(request: Request, env: Env, userId: string)
   const nextRole = body.role ?? user.role;
   const nextBanned = typeof body.banned === "boolean" ? body.banned : user.banned === 1;
   await assertNotLastAdminMutation(env, locale, auth.user.id, user, nextRole, nextBanned);
+  if (body.newPassword && user.id === auth.user.id) {
+    // 自己改密码必须走 account/password 校验当前密码，不能让管理员 patch 成为弱认证入口。
+    throw new HttpError(400, serverText(locale, "auth.selfPasswordResetForbidden"));
+  }
   const timestamp = nowIso();
   const passwordHash = body.newPassword ? await hashPassword(body.newPassword) : null;
   const updateUser = env.DB.prepare(`

@@ -51,6 +51,7 @@ export const adminCreateUserBodySchema = z.object({
  * 管理员局部更新用户请求契约。
  *
  * 空 patch 被拒绝，是为了把前端状态机误触发暴露为边界错误，而不是生成无意义审计操作。
+ * newPassword 只表示管理员重置他人账号；当前用户修改自己的密码必须走 account schema。
  */
 export const adminPatchUserBodySchema = z.object({
   role: userRoleSchema.optional(),
