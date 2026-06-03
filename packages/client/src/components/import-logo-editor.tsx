@@ -3,6 +3,7 @@ import { Image as ImageIcon, ImageOff, Images, Link, Loader2, RefreshCw, Search,
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaCandidateSearchPanel } from "@/components/media-candidate-search-panel";
 import { MediaCandidateViewport } from "@/components/media-candidate-viewport";
 import { MediaThumbnailButton } from "@/components/media-thumbnail-button";
@@ -158,9 +159,16 @@ export function ImportLogoEditor({ name, value, assetPreviewUrl, onChange }: Imp
                 <p className="mt-1 text-xs text-muted-foreground">{t("import.logoPreviewHint")}</p>
               </div>
               {displayedLogo ? (
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => chooseRemote(undefined)} aria-label={t("import.logoClear")}>
-                  <ImageOff className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => chooseRemote(undefined)} aria-label={t("import.logoClear")}>
+                      <ImageOff className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="text-xs">
+                    {t("import.logoClear")}
+                  </TooltipContent>
+                </Tooltip>
               ) : null}
             </div>
 

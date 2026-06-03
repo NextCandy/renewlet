@@ -1,7 +1,9 @@
 // 导入 Logo 编辑器测试保护“暂存资产先预览、apply 时再持久化”的导入边界。
+import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ImportLogoEditor } from "./import-logo-editor";
 
 type MediaCandidateResolve = typeof import("@/services/media-candidate-service").mediaCandidateService.resolve;
@@ -54,6 +56,10 @@ function mockMatchMedia(matchesByQuery: Record<string, boolean> = {}) {
   });
 }
 
+function renderWithTooltipProvider(ui: ReactNode) {
+  return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);
+}
+
 describe("ImportLogoEditor", () => {
   beforeEach(() => {
     mocks.loadUploadedLogosInitial.mockReset();
@@ -79,7 +85,7 @@ describe("ImportLogoEditor", () => {
     const user = userEvent.setup();
     mockMatchMedia({ "(max-width: 767px)": true });
 
-    render(
+    renderWithTooltipProvider(
       <ImportLogoEditor
         name="Apple"
         value={null}
@@ -118,7 +124,7 @@ describe("ImportLogoEditor", () => {
     const user = userEvent.setup();
     mockMatchMedia({ "(max-width: 767px)": true });
 
-    render(
+    renderWithTooltipProvider(
       <ImportLogoEditor
         name="Apple"
         value="https://example.com/apple.svg"
@@ -129,14 +135,19 @@ describe("ImportLogoEditor", () => {
     await user.click(screen.getByRole("button", { name: "修改 Logo" }));
 
     expect(await screen.findByRole("button", { name: "关闭" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "清除 Logo" }).querySelector(".lucide-image-off")).not.toBeNull();
+    const clearLogoButton = screen.getByRole("button", { name: "清除 Logo" });
+    expect(clearLogoButton.querySelector(".lucide-image-off")).not.toBeNull();
+
+    await user.hover(clearLogoButton);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("清除 Logo");
   });
 
   it("renders the trigger and sheet preview on the unified subscription logo surface", async () => {
     const user = userEvent.setup();
     mockMatchMedia({ "(max-width: 767px)": true });
 
-    render(
+    renderWithTooltipProvider(
       <ImportLogoEditor
         name="Apple"
         value="https://example.com/apple.svg"
@@ -164,7 +175,7 @@ describe("ImportLogoEditor", () => {
     const onChange = vi.fn();
     mockMatchMedia({ "(max-width: 767px)": true });
 
-    render(
+    renderWithTooltipProvider(
       <ImportLogoEditor
         name="Apple"
         value={null}
