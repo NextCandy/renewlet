@@ -1,6 +1,6 @@
 // Worker 系统更新测试保护 Cloudflare 只读升级契约，避免前端误暴露 Docker 页面内更新入口。
 import rootPackageJson from "../../../package.json";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { systemRestart, systemUpdate, systemVersion } from "./system";
 import type { Env } from "./types";
 
@@ -12,7 +12,13 @@ vi.mock("./auth", () => ({
 }));
 
 describe("Cloudflare system update contract", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns deploy-only version capability", async () => {
+    mockLatestRelease("1.2.3");
+
     const response = await systemVersion(new Request("https://renewlet.example/api/app/admin/system/version", {
       headers: { "accept-language": "en-US" },
     }), envFixture());
@@ -42,7 +48,9 @@ describe("Cloudflare system update contract", () => {
     expect(body).not.toHaveProperty("runtime");
   });
 
-  it("falls back from placeholder metadata to package version plus commit", async () => {
+  it("treats branch deploys with the same base version as up to date", async () => {
+    mockLatestRelease(rootPackageJson.version);
+
     const env = envFixture({
       RENEWLET_VERSION: "0.0.0-dev",
       RENEWLET_COMMIT: "504c1681822ac60f0caafdb0b1ba731853c9169d",
@@ -57,7 +65,7 @@ describe("Cloudflare system update contract", () => {
     const expectedVersion = `${rootPackageJson.version}-dev+504c168`;
     expect(body).toMatchObject({
       currentVersion: expectedVersion,
-      latestVersion: expectedVersion,
+      latestVersion: rootPackageJson.version,
       checkSucceeded: true,
       hasUpdate: false,
       deployment: "cloudflare",
@@ -70,7 +78,37 @@ describe("Cloudflare system update contract", () => {
     });
   });
 
-  it("falls back to package dev version when commit metadata is missing", async () => {
+  it("reports a newer stable release without enabling executable updates", async () => {
+    mockLatestRelease("0.1.1");
+    const env = envFixture({
+      RENEWLET_VERSION: "0.1.0-dev+d0059b5",
+      RENEWLET_COMMIT: "d0059b51822ac60f0caafdb0b1ba731853c9169d",
+    });
+
+    const response = await systemVersion(new Request("https://renewlet.example/api/app/admin/system/version", {
+      headers: { "accept-language": "en-US" },
+    }), env);
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toMatchObject({
+      currentVersion: "0.1.0-dev+d0059b5",
+      latestVersion: "0.1.1",
+      checkSucceeded: true,
+      hasUpdate: true,
+      updateMode: "cloudflare-deploy",
+      updateSupported: false,
+      releaseInfo: {
+        tagName: "v0.1.1",
+        version: "0.1.1",
+        htmlUrl: "https://github.com/zhiyingzzhou/renewlet/releases/tag/v0.1.1",
+      },
+    });
+  });
+
+  it("keeps the dialog usable when GitHub release checks fail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 403 })));
+
     const env = envFixture();
     delete env.RENEWLET_VERSION;
     delete env.RENEWLET_COMMIT;
@@ -85,10 +123,11 @@ describe("Cloudflare system update contract", () => {
     expect(body).toMatchObject({
       currentVersion: expectedVersion,
       latestVersion: expectedVersion,
-      checkSucceeded: true,
+      checkSucceeded: false,
       hasUpdate: false,
       deployment: "cloudflare",
       releaseInfo: null,
+      warning: "GitHub Releases cannot be fetched right now. Try again later.",
       build: {
         version: expectedVersion,
         commit: "",
@@ -127,4 +166,17 @@ function envFixture(overrides: Partial<Env> = {}): Env {
     RENEWLET_BUILD_TIME: "2026-06-02T00:00:00Z",
     ...overrides,
   };
+}
+
+function mockLatestRelease(version: string) {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+    tag_name: `v${version}`,
+    name: `Renewlet ${version}`,
+    body: "",
+    published_at: "2026-06-02T00:00:00Z",
+    html_url: `https://github.com/zhiyingzzhou/renewlet/releases/tag/v${version}`,
+    prerelease: false,
+    draft: false,
+    assets: [],
+  })));
 }

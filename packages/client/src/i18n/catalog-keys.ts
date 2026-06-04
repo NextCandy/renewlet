@@ -1121,6 +1121,7 @@ export const MESSAGE_KEYS = [
   "system.cloudflareDeployGuide",
   "system.commitLink",
   "system.currentVersion",
+  "system.deployUpdateAvailableDescription",
   "system.latestVersion",
   "system.noUpdateDescription",
   "system.noUpdateTitle",

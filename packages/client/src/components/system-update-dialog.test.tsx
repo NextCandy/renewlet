@@ -53,6 +53,7 @@ vi.mock("@/i18n/I18nProvider", () => ({
         "system.unsupportedDescription": "请使用原部署方式升级。",
         "system.unsupportedTitle": "当前部署不支持一键更新",
         "system.updateAvailableDescription": "可以更新到 v{version}。",
+        "system.deployUpdateAvailableDescription": "可以更新到 v{version}。请通过部署流程升级。",
         "system.updateAvailableTitle": "发现新版本",
         "system.updateComplete": "更新完成",
         "system.updateFailedDescription": "更新失败，请稍后重试。",
@@ -267,9 +268,10 @@ describe("SystemUpdateDialog", () => {
     expect(screen.queryByText("源码构建")).not.toBeInTheDocument();
   });
 
-  it("shows Cloudflare deploy guidance without source wording or update actions", async () => {
+  it("shows Cloudflare available release without in-app update actions", async () => {
     mockVersionEndpoint({
-      hasUpdate: false,
+      latestVersion: "1.1.0",
+      hasUpdate: true,
       checkSucceeded: true,
       deployment: "cloudflare",
       updateMode: "cloudflare-deploy",
@@ -297,18 +299,19 @@ describe("SystemUpdateDialog", () => {
 
     await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
 
-    expect(await screen.findByText("页面内更新不可用")).toBeInTheDocument();
-    expect(screen.getByText("Cloudflare 需要通过部署流程升级")).toBeInTheDocument();
+    expect(await screen.findByText("发现新版本")).toBeInTheDocument();
+    expect(screen.getByText("可以更新到 v1.1.0。请通过部署流程升级。")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Cloudflare 部署说明" })).toHaveAttribute("href", expect.stringContaining("docs/cloudflare-workers-deploy.md"));
     expect(screen.getByRole("link", { name: "发布页" })).toHaveAttribute("href", "https://github.com/zhiyingzzhou/renewlet/releases/tag/v1.1.0");
+    expect(screen.queryByText("页面内更新不可用")).not.toBeInTheDocument();
     expect(screen.queryByText("源码构建")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "立即更新" })).not.toBeInTheDocument();
   });
 
-  it("shows Cloudflare dev deploy guidance with commit link and no deferred check state", async () => {
+  it("shows Cloudflare dev deploys as up to date with commit link", async () => {
     mockVersionEndpoint({
       currentVersion: "0.1.0-dev+504c168",
-      latestVersion: "0.1.0-dev+504c168",
+      latestVersion: "0.1.0",
       hasUpdate: false,
       checkSucceeded: true,
       deployment: "cloudflare",
@@ -329,13 +332,44 @@ describe("SystemUpdateDialog", () => {
 
     await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
 
-    expect(await screen.findByText("页面内更新不可用")).toBeInTheDocument();
-    expect(screen.getByText("Cloudflare 需要通过部署流程升级")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Cloudflare 部署说明" })).toHaveAttribute("href", expect.stringContaining("docs/cloudflare-workers-deploy.md"));
+    expect(await screen.findByText("已是最新版本")).toBeInTheDocument();
+    expect(screen.getByText("无需操作。")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "提交" })).toHaveAttribute("href", "https://github.com/zhiyingzzhou/renewlet/commit/504c1681822ac60f0caafdb0b1ba731853c9169d");
+    expect(screen.queryByText("页面内更新不可用")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Cloudflare 部署说明" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布页" })).not.toBeInTheDocument();
     expect(screen.queryByText("暂时无法检查更新")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "立即更新" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Cloudflare commit link when release checks are deferred", async () => {
+    mockVersionEndpoint({
+      currentVersion: "0.1.0-dev+504c168",
+      latestVersion: "0.1.0-dev+504c168",
+      hasUpdate: false,
+      checkSucceeded: false,
+      deployment: "cloudflare",
+      updateMode: "cloudflare-deploy",
+      updateSupported: false,
+      warning: "GitHub Release 暂时不可用",
+      releaseInfo: null,
+      build: {
+        version: "0.1.0-dev+504c168",
+        commit: "504c1681822ac60f0caafdb0b1ba731853c9169d",
+        buildTime: "2026-06-04T17:46:43Z",
+        buildType: "cloudflare",
+      },
+    });
+
+    const user = userEvent.setup();
+    renderWithQuery(<SystemUpdateHarness />);
+
+    await user.click(await screen.findByRole("button", { name: "打开系统更新" }));
+
+    expect(await screen.findByText("GitHub Release 暂时不可用")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "提交" })).toHaveAttribute("href", "https://github.com/zhiyingzzhou/renewlet/commit/504c1681822ac60f0caafdb0b1ba731853c9169d");
+    expect(screen.queryByText("已是最新版本")).not.toBeInTheDocument();
+    expect(screen.queryByText("页面内更新不可用")).not.toBeInTheDocument();
   });
 
   it("shows update error and retry button", async () => {

@@ -70,6 +70,7 @@ export const messages = [
   msg({ id: "system.unsupportedDescription", message: "请使用原部署方式升级。" }),
   msg({ id: "system.updateAvailableTitle", message: "发现新版本" }),
   msg({ id: "system.updateAvailableDescription", message: "可以更新到 v{version}。更新会替换 Docker 运行二进制。" }),
+  msg({ id: "system.deployUpdateAvailableDescription", message: "可以更新到 v{version}。请通过部署流程升级。" }),
   msg({ id: "system.noUpdateTitle", message: "已是最新版本" }),
   msg({ id: "system.noUpdateDescription", message: "无需操作。" }),
   msg({ id: "system.releaseLink", message: "发布页" }),

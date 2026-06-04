@@ -6,7 +6,7 @@ import { useSystemRestart, useSystemUpdate, useSystemVersion } from "@/hooks/use
 import { useI18n } from "@/i18n/I18nProvider";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
-import type { SystemDeployment } from "@/lib/api/schemas/app";
+import type { SystemDeployment, SystemVersionResponse } from "@/lib/api/schemas/app";
 import type { MessageKey } from "@/i18n/messages";
 
 interface SystemUpdateDialogProps {
@@ -53,6 +53,7 @@ export function SystemUpdateDialog({ open, onOpenChange }: SystemUpdateDialogPro
   const isRestarting = restartMutation.isPending || restartCountdown > 0;
   const showCompletedRestart = updateMutation.isSuccess && updateMutation.data?.needsRestart;
   const commitLink = version ? commitUrl(version.build.commit) : null;
+  const isDeployOnlyUpdate = version?.hasUpdate && version.updateMode === "cloudflare-deploy";
 
   const resetUpdateState = useCallback(() => {
     setUpdateError("");
@@ -197,22 +198,11 @@ export function SystemUpdateDialog({ open, onOpenChange }: SystemUpdateDialogPro
                   </Button>
                 </div>
               ) : !version.checkSucceeded ? (
-                <StatePanel icon={<AlertCircle className="h-4 w-4" />} tone="warning" title={t("system.checkDeferredTitle")} description={version.warning ?? t("system.checkDeferredDescription")} />
-              ) : !version.updateSupported ? (
                 <div className="space-y-3">
-                  <StatePanel
-                    icon={<Server className="h-4 w-4" />}
-                    tone="neutral"
-                    title={t("system.updateUnavailableTitle")}
-                    description={version.unsupportedReason ?? t("system.unsupportedDescription")}
-                  />
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-background/40 px-3 py-2">
-                    {version.updateMode === "cloudflare-deploy" ? <ReleaseLink href={CLOUDFLARE_DEPLOY_GUIDE_URL} label={t("system.cloudflareDeployGuide")} /> : null}
-                    {version.releaseInfo?.htmlUrl ? <ReleaseLink href={version.releaseInfo.htmlUrl} label={t("system.releaseLink")} /> : null}
-                    {!version.releaseInfo?.htmlUrl && commitLink ? <ReleaseLink href={commitLink} label={t("system.commitLink")} /> : null}
-                  </div>
+                  <StatePanel icon={<AlertCircle className="h-4 w-4" />} tone="warning" title={t("system.checkDeferredTitle")} description={version.warning ?? t("system.checkDeferredDescription")} />
+                  {version.deployment === "cloudflare" ? <SystemLinks version={version} commitLink={commitLink} /> : null}
                 </div>
-              ) : version.hasUpdate ? (
+              ) : version.hasUpdate && version.updateSupported ? (
                 <div className="space-y-3">
                   <StatePanel icon={<Download className="h-4 w-4" />} tone="warning" title={t("system.updateAvailableTitle")} description={t("system.updateAvailableDescription", { version: version.latestVersion })} />
                   <Button className="w-full" onClick={handleUpdate} disabled={!canUpdate}>
@@ -221,10 +211,30 @@ export function SystemUpdateDialog({ open, onOpenChange }: SystemUpdateDialogPro
                   </Button>
                   {version.releaseInfo?.htmlUrl ? <ReleaseLink href={version.releaseInfo.htmlUrl} label={t("system.viewChangelog")} /> : null}
                 </div>
+              ) : isDeployOnlyUpdate ? (
+                <div className="space-y-3">
+                  <StatePanel icon={<Download className="h-4 w-4" />} tone="warning" title={t("system.updateAvailableTitle")} description={t("system.deployUpdateAvailableDescription", { version: version.latestVersion })} />
+                  <SystemLinks version={version} commitLink={commitLink} showDeployGuide />
+                </div>
+              ) : version.deployment === "cloudflare" ? (
+                <div className="space-y-3">
+                  <StatePanel icon={<Check className="h-4 w-4" />} tone="success" title={t("system.noUpdateTitle")} description={t("system.noUpdateDescription")} />
+                  <SystemLinks version={version} commitLink={commitLink} />
+                </div>
+              ) : !version.updateSupported ? (
+                <div className="space-y-3">
+                  <StatePanel
+                    icon={<Server className="h-4 w-4" />}
+                    tone="neutral"
+                    title={t("system.updateUnavailableTitle")}
+                    description={version.unsupportedReason ?? t("system.unsupportedDescription")}
+                  />
+                  <SystemLinks version={version} commitLink={commitLink} />
+                </div>
               ) : (
                 <div className="space-y-3">
                   <StatePanel icon={<Check className="h-4 w-4" />} tone="success" title={t("system.noUpdateTitle")} description={t("system.noUpdateDescription")} />
-                  {version.releaseInfo?.htmlUrl ? <ReleaseLink href={version.releaseInfo.htmlUrl} label={t("system.releaseLink")} /> : null}
+                  <SystemLinks version={version} commitLink={commitLink} />
                 </div>
               )}
 
@@ -298,6 +308,19 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
       <dt className="truncate text-muted-foreground">{label}</dt>
       <dd className="max-w-36 truncate text-right font-medium text-foreground">{value || "-"}</dd>
+    </div>
+  );
+}
+
+function SystemLinks({ version, commitLink, showDeployGuide = false }: { version: SystemVersionResponse; commitLink: string | null; showDeployGuide?: boolean }) {
+  const { t } = useI18n();
+  const hasLinks = showDeployGuide || Boolean(version.releaseInfo?.htmlUrl) || Boolean(commitLink);
+  if (!hasLinks) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border bg-background/40 px-3 py-2">
+      {showDeployGuide ? <ReleaseLink href={CLOUDFLARE_DEPLOY_GUIDE_URL} label={t("system.cloudflareDeployGuide")} /> : null}
+      {version.releaseInfo?.htmlUrl ? <ReleaseLink href={version.releaseInfo.htmlUrl} label={t("system.releaseLink")} /> : null}
+      {!version.releaseInfo?.htmlUrl && commitLink ? <ReleaseLink href={commitLink} label={t("system.commitLink")} /> : null}
     </div>
   );
 }

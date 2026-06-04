@@ -199,6 +199,11 @@ msgid "system.updateAvailableDescription"
 msgstr "You can update to v{version}. The update replaces the Docker runtime binary."
 
 #. js-lingui-explicit-id
+#: src/i18n/descriptors/common.ts:73
+msgid "system.deployUpdateAvailableDescription"
+msgstr "You can update to v{version}. Upgrade through the deployment workflow."
+
+#. js-lingui-explicit-id
 #: src/i18n/descriptors/common.ts:53
 msgid "system.badgeUpdate"
 msgstr "Update to v{version}"
