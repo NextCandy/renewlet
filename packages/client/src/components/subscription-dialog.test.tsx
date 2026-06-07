@@ -103,11 +103,12 @@ describe("SubscriptionDialog", () => {
     }
     const dateError = screen.getByText("请选择开始日期和下次扣费日期");
     expect(dateError).toBeInTheDocument();
+    const autoCalculateHelp = screen.getByText("根据开始日期和扣费周期自动计算");
     expect(startDateButton).toHaveAttribute("aria-invalid", "true");
     expect(startDateButton).toHaveAttribute("aria-describedby", "dates-error");
     expect(startDateButton.parentElement).toContainElement(dateError);
     expect(nextBillingDateButton).toHaveAttribute("aria-invalid", "false");
-    expect(nextBillingDateButton).not.toHaveAttribute("aria-describedby");
+    expect(nextBillingDateButton).toHaveAttribute("aria-describedby", autoCalculateHelp.id);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -254,7 +255,8 @@ describe("SubscriptionDialog", () => {
     const renewalDateButton = screen.getByRole("button", { name: /到期日期.*2026年6月14日/ });
     expect(renewalDateButton).toBeDisabled();
     expect(screen.queryByText("2027年6月25日")).not.toBeInTheDocument();
-    expect(screen.getByText("到期日根据购买日期和服务时长自动计算。")).toBeInTheDocument();
+    const termDateHelp = screen.getByText("到期日根据购买日期和服务时长自动计算。");
+    expect(renewalDateButton).toHaveAttribute("aria-describedby", termDateHelp.id);
 
     await user.click(screen.getByRole("button", { name: "保存修改" }));
 
@@ -266,6 +268,42 @@ describe("SubscriptionDialog", () => {
       oneTimeTermCount: 1,
       oneTimeTermUnit: "month",
     }));
+  });
+
+  it("renders buyout date help inline without disabled renewal controls", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <TooltipProvider delayDuration={0}>
+        <SubscriptionDialog
+          mode="create"
+          open
+          onOpenChange={vi.fn()}
+          onSubmit={onSubmit}
+        />
+      </TooltipProvider>,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "扣费周期" }));
+    await user.click(await screen.findByRole("option", { name: "一次性购买" }));
+    await user.click(screen.getByRole("button", { name: "买断/长期有效" }));
+
+    const purchaseDateButton = screen.getByRole("button", { name: /购买日期.*选择日期/ });
+    const buyoutHelp = screen.getByText("只保存购买日期，不进入续费或到期日历。");
+    expect(purchaseDateButton).toHaveAttribute("aria-describedby", buyoutHelp.id);
+    expect(buyoutHelp.parentElement).not.toHaveClass("border-dashed");
+    expect(screen.queryByLabelText("自动计算到期日")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /到期日期/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "添加订阅" }));
+
+    const dateError = screen.getByText("请选择开始日期和下次扣费日期");
+    const invalidPurchaseDateButton = screen.getByRole("button", { name: /购买日期.*选择日期/ });
+    const describedBy = invalidPurchaseDateButton.getAttribute("aria-describedby");
+    expect(describedBy).toContain(dateError.id);
+    expect(describedBy).toContain(buyoutHelp.id);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("keeps explicit reminder days when editing historical subscriptions", () => {

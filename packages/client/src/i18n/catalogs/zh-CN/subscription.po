@@ -471,7 +471,7 @@ msgstr "买断/长期有效"
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/subscription.ts:121
 msgid "subscription.oneTimeBuyoutDateHelp"
-msgstr "买断/长期有效记录只保存购买日期，不会进入续费或到期日历。"
+msgstr "只保存购买日期，不进入续费或到期日历。"
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/subscription.ts:11

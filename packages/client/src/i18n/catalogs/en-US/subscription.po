@@ -471,7 +471,7 @@ msgstr "Buyout / long-term"
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/subscription.ts:121
 msgid "subscription.oneTimeBuyoutDateHelp"
-msgstr "Buyout / long-term records only store the purchase date and do not appear in renewal or expiry calendars."
+msgstr "Only stores the purchase date and stays out of renewal or expiry calendars."
 
 #. js-lingui-explicit-id
 #: src/i18n/descriptors/subscription.ts:11

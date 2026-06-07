@@ -118,7 +118,7 @@ export const messages = [
   msg({ id: "subscription.autoCalculateHelp", message: "根据开始日期和扣费周期自动计算" }),
   msg({ id: "subscription.oneTimeDateHelp", message: "一次性购买不会自动推算后续续费日。" }),
   msg({ id: "subscription.oneTimeTermDateHelp", message: "到期日根据购买日期和服务时长自动计算。" }),
-  msg({ id: "subscription.oneTimeBuyoutDateHelp", message: "买断/长期有效记录只保存购买日期，不会进入续费或到期日历。" }),
+  msg({ id: "subscription.oneTimeBuyoutDateHelp", message: "只保存购买日期，不进入续费或到期日历。" }),
   msg({ id: "subscription.reminderCustom", message: "自定义天数" }),
   msg({ id: "subscription.reminderDisabled", message: "不要提醒" }),
   msg({ id: "subscription.reminderInherit", message: "默认值从设置中获取（提前 {days} 天）" }),

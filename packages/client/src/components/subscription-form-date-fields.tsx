@@ -19,6 +19,11 @@ interface SubscriptionFormDateFieldsProps {
   errors: SubscriptionFormErrors;
 }
 
+function describedBy(...ids: Array<string | undefined>) {
+  const value = ids.filter((item): item is string => Boolean(item)).join(" ");
+  return value || undefined;
+}
+
 export function SubscriptionFormDateFields({ id, formData, update, errors }: SubscriptionFormDateFieldsProps) {
   const { t, formatDateOnly } = useI18n();
   const [startDatePickerOpen, setStartDatePickerOpen] = useState(false);
@@ -26,15 +31,19 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
   const startDateId = id("startDate");
   const startDateLabelId = id("startDate-label");
   const startDateValueId = id("startDate-value");
+  const startDateHelpId = id("startDate-help");
   const nextBillingDateId = id("nextBillingDate");
   const nextBillingDateLabelId = id("nextBillingDate-label");
   const nextBillingDateValueId = id("nextBillingDate-value");
+  const nextBillingDateHelpId = id("nextBillingDate-help");
+  const datesErrorId = id("dates-error");
   const selectedStartDate = formData.startDate ? dateOnlyToLocalDate(formData.startDate) : undefined;
   const selectedNextBillingDate = formData.nextBillingDate ? dateOnlyToLocalDate(formData.nextBillingDate) : undefined;
   // 当非法到期日被清空后，打开到期日历应落在开始日所在月份，让下一个合法选择直接可见。
   const nextBillingDateCalendarMonth = selectedNextBillingDate ?? selectedStartDate;
   const isNextBillingDateDisabled = formData.autoCalculate || formData.billingCycle === "one-time";
   const isOneTimeBuyout = formData.billingCycle === "one-time" && formData.oneTimeMode === "buyout";
+  const showAutoCalculate = formData.billingCycle !== "one-time";
   const startDateLabel = formData.billingCycle === "one-time"
     ? t("subscription.field.purchaseDate")
     : t("subscription.field.startDate");
@@ -48,25 +57,40 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
       : "next";
   const startDateHasError = dateErrorTarget === "start";
   const nextBillingDateHasError = dateErrorTarget === "next";
+  const nextBillingDateHelp =
+    formData.billingCycle === "one-time" && formData.oneTimeMode === "term"
+      ? t("subscription.oneTimeTermDateHelp")
+      : formData.autoCalculate
+        ? t("subscription.autoCalculateHelp")
+        : null;
+  const startDateDescribedBy = describedBy(
+    startDateHasError ? datesErrorId : undefined,
+    isOneTimeBuyout ? startDateHelpId : undefined,
+  );
+  const nextBillingDateDescribedBy = describedBy(
+    nextBillingDateHasError ? datesErrorId : undefined,
+    nextBillingDateHelp ? nextBillingDateHelpId : undefined,
+  );
 
   return (
     <div className="grid gap-4 rounded-lg border border-border bg-secondary/30 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Label className="text-base font-medium">{t("subscription.section.dates")}</Label>
-        <div className="flex items-center gap-2">
-          <Label htmlFor={id("autoCalculate")} className="text-sm text-muted-foreground cursor-pointer">
-            {t("subscription.autoCalculate")}
-          </Label>
-          <Switch
-            id={id("autoCalculate")}
-            checked={formData.autoCalculate}
-            disabled={formData.billingCycle === "one-time"}
-            onCheckedChange={(checked) => update("autoCalculate", checked)}
-          />
-        </div>
+        {showAutoCalculate ? (
+          <div className="flex items-center gap-2">
+            <Label htmlFor={id("autoCalculate")} className="text-sm text-muted-foreground cursor-pointer">
+              {t("subscription.autoCalculate")}
+            </Label>
+            <Switch
+              id={id("autoCalculate")}
+              checked={formData.autoCalculate}
+              onCheckedChange={(checked) => update("autoCalculate", checked)}
+            />
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid items-start gap-4 sm:grid-cols-2">
+      <div className={cn("grid items-start gap-4", !isOneTimeBuyout && "sm:grid-cols-2")}>
         <div className="grid gap-2">
           <Label id={startDateLabelId} htmlFor={startDateId}>
             {startDateLabel}
@@ -78,7 +102,7 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
                 variant="outline"
                 aria-labelledby={`${startDateLabelId} ${startDateValueId}`}
                 aria-invalid={startDateHasError}
-                aria-describedby={startDateHasError ? id("dates-error") : undefined}
+                aria-describedby={startDateDescribedBy}
                 className={cn(
                   "w-full justify-start text-left font-normal border-border bg-secondary",
                   !formData.startDate && "text-muted-foreground",
@@ -109,7 +133,12 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
               />
             </PopoverContent>
           </Popover>
-          <FieldError id={id("dates-error")} message={startDateHasError ? errors.dates : undefined} />
+          <FieldError id={datesErrorId} message={startDateHasError ? errors.dates : undefined} />
+          {isOneTimeBuyout ? (
+            <p id={startDateHelpId} className="text-xs text-muted-foreground">
+              {t("subscription.oneTimeBuyoutDateHelp")}
+            </p>
+          ) : null}
         </div>
 
         {!isOneTimeBuyout ? (
@@ -128,7 +157,7 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
                   disabled={isNextBillingDateDisabled}
                   aria-labelledby={`${nextBillingDateLabelId} ${nextBillingDateValueId}`}
                   aria-invalid={nextBillingDateHasError}
-                  aria-describedby={nextBillingDateHasError ? id("dates-error") : undefined}
+                  aria-describedby={nextBillingDateDescribedBy}
                   className={cn(
                     "w-full justify-start text-left font-normal border-border bg-secondary",
                     !formData.nextBillingDate && "text-muted-foreground",
@@ -165,19 +194,14 @@ export function SubscriptionFormDateFields({ id, formData, update, errors }: Sub
                 />
               </PopoverContent>
             </Popover>
-            <FieldError id={id("dates-error")} message={nextBillingDateHasError ? errors.dates : undefined} />
-            {formData.autoCalculate && (
-              <p className="text-xs text-muted-foreground">{t("subscription.autoCalculateHelp")}</p>
-            )}
-            {formData.billingCycle === "one-time" && formData.oneTimeMode === "term" && (
-              <p className="text-xs text-muted-foreground">{t("subscription.oneTimeTermDateHelp")}</p>
-            )}
+            <FieldError id={datesErrorId} message={nextBillingDateHasError ? errors.dates : undefined} />
+            {nextBillingDateHelp ? (
+              <p id={nextBillingDateHelpId} className="text-xs text-muted-foreground">
+                {nextBillingDateHelp}
+              </p>
+            ) : null}
           </div>
-        ) : (
-          <div className="grid content-end gap-2 rounded-md border border-dashed border-border bg-background/50 p-3 text-sm text-muted-foreground">
-            {t("subscription.oneTimeBuyoutDateHelp")}
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
