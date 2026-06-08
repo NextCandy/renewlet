@@ -3,6 +3,7 @@ import {
   isAIProviderBaseUrlRequired,
   resolveAIProviderEndpoint,
 } from "../ai-provider-endpoints";
+import { aiRecognitionPromptSpec } from "../ai-recognition-prompt";
 import {
   AI_RECOGNITION_MAX_IMAGES,
   aiGeneratedRecognizeObjectSchema,
@@ -11,6 +12,7 @@ import {
   aiRecognitionDiagnosticsSchema,
   aiRecognitionSettingsSchema,
   aiRecognitionStreamEventSchema,
+  aiRecognizeResponseSchema,
 } from "./ai-recognition";
 
 function generatedDraft(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -44,6 +46,13 @@ function generatedDraft(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe("AI recognition generated schema", () => {
+  it("allows nullable generated website values while keeping final responses strict", () => {
+    expect(aiGeneratedRecognizeObjectSchema.safeParse({
+      subscriptions: [generatedDraft({ website: { value: null, source: "suggested" } })],
+      warnings: [],
+    }).success).toBe(true);
+  });
+
   it("requires complete draft fields and a notes decision object", () => {
     expect(aiGeneratedRecognizeObjectSchema.safeParse({
       subscriptions: [generatedDraft()],
@@ -99,6 +108,18 @@ describe("AI recognition generated schema", () => {
   });
 });
 
+describe("AI recognition prompt contract", () => {
+  it("tells models to use whole-field null for unknown websites", () => {
+    const promptText = [
+      ...aiRecognitionPromptSpec.outputContract,
+      ...aiRecognitionPromptSpec.fieldRules,
+    ].join("\n");
+
+    expect(promptText).toContain("website: null");
+    expect(promptText).toContain("never output {\"value\": null, \"source\": \"suggested\"}");
+  });
+});
+
 describe("AI recognition diagnostics schema", () => {
   it("allows five image metadata entries and rejects more", () => {
     const diagnostics = {
@@ -136,6 +157,47 @@ describe("AI recognition diagnostics schema", () => {
         ...diagnostics.request,
         images: [...diagnostics.request.images, { mediaType: "image/png", sizeBytes: 4 }],
       },
+    }).success).toBe(false);
+  });
+});
+
+describe("AI recognition final response schema", () => {
+  it("rejects generated-only nullable website objects after normalization boundary", () => {
+    const diagnostics = {
+      schemaVersion: "1",
+      promptVersion: "test",
+      schemaName: "renewlet_ai_subscription_recognition",
+      prompt: {
+        system: { value: "system", truncated: false },
+        user: { value: "user", truncated: false },
+      },
+      output: {
+        rawModelText: null,
+        rawObjectJson: null,
+      },
+      request: {
+        providerType: "openai",
+        transportProtocol: "openai-chat",
+        model: "gpt-5.1",
+        thinkingControl: null,
+        maxOutputTokens: 12000,
+        textCharCount: 12,
+        images: [],
+      },
+      response: {
+        usage: null,
+        finishReason: null,
+        providerMetadata: null,
+      },
+    };
+
+    expect(aiRecognizeResponseSchema.safeParse({
+      providerType: "openai",
+      transportProtocol: "openai-chat",
+      model: "gpt-5.1",
+      subscriptions: [generatedDraft({ website: { value: null, source: "suggested" } })],
+      warnings: [],
+      diagnostics,
     }).success).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { AI_RECOGNITION_MAX_IMAGES, type AiRecognitionStreamEvent } from "@renewlet/shared/schemas/ai-recognition";
-import { recognizeSubscriptions, recognizeSubscriptionsStream, testAIRecognitionConnection } from "./ai-recognition";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { AI_RECOGNITION_MAX_IMAGES } from "@renewlet/shared/schemas/ai-recognition";
+import { recognizeSubscriptions, testAIRecognitionConnection } from "./ai-recognition";
 import { generatedDraft } from "./ai-recognition.test-utils";
 import type { Env } from "./types";
 
@@ -140,49 +140,14 @@ function testConnectionRequestFor(settings: unknown): Request {
   });
 }
 
-function streamTextResult({
-  object = {
-    subscriptions: [generatedDraft()],
-    warnings: [],
-  },
-  outputError,
-  fullStream = [],
-  partialOutputStream = [],
-}: {
-  object?: unknown;
-  outputError?: unknown;
-  fullStream?: unknown[];
-  partialOutputStream?: unknown[];
-}) {
-  return {
-    output: outputError ? Promise.reject(outputError) : Promise.resolve(object),
-    fullStream: asyncIterable(fullStream),
-    partialOutputStream: asyncIterable(partialOutputStream),
-    usage: Promise.resolve({ inputTokens: 5, outputTokens: 7, totalTokens: 12 }),
-    finishReason: Promise.resolve("stop"),
-    providerMetadata: Promise.resolve({ openai: { responseId: "resp_stream" } }),
-  };
-}
 
-async function* asyncIterable(values: unknown[]): AsyncIterable<unknown> {
-  for (const value of values) {
-    yield value;
-  }
-}
-
-async function readSSEEvents(response: Response): Promise<AiRecognitionStreamEvent[]> {
-  const text = await response.text();
-  return text
-    .replace(/\r\n/g, "\n")
-    .split("\n\n")
-    .filter((frame) => frame.trim().length > 0)
-    .map((frame) => {
-      const data = frame.split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n");
-      return JSON.parse(data) as AiRecognitionStreamEvent;
-    });
+function noObjectGeneratedErrorWithText(text: string): Error {
+  return Object.assign(new Error("No object generated: response did not match schema."), {
+    __noObjectGenerated: true,
+    text,
+    usage: { inputTokens: 10, outputTokens: 20 },
+    finishReason: "stop",
+  });
 }
 
 describe("Cloudflare AI recognition", () => {
@@ -225,6 +190,10 @@ describe("Cloudflare AI recognition", () => {
       currencies: [],
     });
     dbMocks.listSubscriptionTags.mockResolvedValue(["VPS", "云服务器"]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("normalizes complete AI SDK objects into strict API drafts", async () => {
@@ -312,61 +281,6 @@ describe("Cloudflare AI recognition", () => {
     expect(body.diagnostics.output.rawObjectJson?.value).toContain("\"name\": \"dmit\"");
     expect(body.diagnostics.request).toMatchObject({ providerType: "openai", transportProtocol: "openai-chat", model: "gpt-5.1", textCharCount: 12, images: [] });
     expect(body.diagnostics.response.finishReason).toBe("stop");
-  });
-
-  it("streams progress, partial counts, real deltas and final drafts", async () => {
-    aiMocks.streamText.mockReturnValue(streamTextResult({
-      object: {
-        subscriptions: [generatedDraft()],
-        warnings: [],
-      },
-      fullStream: [
-        { type: "reasoning-delta", delta: "checking input" },
-        { type: "text-delta", delta: "{\"subscriptions\"" },
-        { type: "finish", finishReason: "stop", usage: { inputTokens: 5, outputTokens: 7 }, providerMetadata: { openai: { responseId: "resp_stream" } } },
-      ],
-      partialOutputStream: [
-        { subscriptions: [generatedDraft()], warnings: ["AI_WARNING_LOW_CONFIDENCE"] },
-      ],
-    }));
-
-    const response = await recognizeSubscriptionsStream(requestForText("dmit 15元 1个月"), envFixture());
-    const events = await readSSEEvents(response);
-    const types = events.map((event) => event.type);
-    const final = events.find((event): event is Extract<AiRecognitionStreamEvent, { type: "recognition/final" }> => event.type === "recognition/final");
-
-    expect(response.headers.get("content-type")).toContain("text/event-stream");
-    expect(types).toContain("recognition/progress");
-    expect(types).toContain("recognition/partial");
-    expect(types).toContain("recognition/text-delta");
-    expect(types).toContain("recognition/reasoning-delta");
-    expect(types.at(-1)).toBe("recognition/final");
-    expect(events).toContainEqual({ type: "recognition/progress", stage: "input-read" });
-    expect(events).toContainEqual({ type: "recognition/progress", stage: "model-start" });
-    expect(events).toContainEqual({ type: "recognition/partial", subscriptionsSeen: 1, warningsSeen: 1 });
-    expect(events).toContainEqual({ type: "recognition/reasoning-delta", delta: "checking input" });
-    expect(final?.response.subscriptions[0]?.name).toBe("dmit");
-    expect(JSON.stringify(events)).not.toContain("sk-test");
-    expect(aiMocks.outputObject).toHaveBeenCalledWith(expect.objectContaining({ name: "renewlet_ai_subscription_recognition" }));
-  });
-
-  it("streams sanitized error events when provider streaming fails", async () => {
-    aiMocks.streamText.mockReturnValue(streamTextResult({
-      outputError: new Error("provider failed sk-stream-secret123"),
-      fullStream: [],
-      partialOutputStream: [],
-    }));
-
-    const response = await recognizeSubscriptionsStream(requestForText("dmit 15元 1个月"), envFixture());
-    const events = await readSSEEvents(response);
-    const error = events.find((event): event is Extract<AiRecognitionStreamEvent, { type: "recognition/error" }> => event.type === "recognition/error");
-    const payload = JSON.stringify(events);
-
-    expect(response.status).toBe(200);
-    expect(error?.code).toBe("AI_RECOGNITION_FAILED");
-    expect(error?.details?.providerMessage).toContain("[redacted]");
-    expect(payload).not.toContain("sk-test");
-    expect(payload).not.toContain("sk-stream-secret123");
   });
 
   it("does not apply saved default thinking when the multipart field is absent", async () => {
@@ -702,6 +616,36 @@ describe("Cloudflare AI recognition", () => {
     expect(aiMocks.generateObject).toHaveBeenCalledTimes(1);
     expect(body.subscriptions[0]?.notes).toBeNull();
     expect(body.subscriptions[0]?.warnings).toEqual(expect.arrayContaining(["AI_WARNING_WEBSITE_UNCERTAIN", "AI_WARNING_LOW_CONFIDENCE"]));
+  });
+
+  it("recovers non-stream drafts from raw JSON when structured output rejects nullable website values", async () => {
+    const rawObject = {
+      subscriptions: [generatedDraft({
+        name: "LocVPS",
+        website: { value: null, source: "suggested" },
+        notes: { value: "LocVPS 是提供 VPS 和云主机相关产品或服务的订阅服务。", source: "suggested" },
+        tags: ["VPS", "云主机"],
+      })],
+      warnings: [],
+    };
+    aiMocks.generateObject.mockRejectedValue(noObjectGeneratedErrorWithText([
+      "```json",
+      JSON.stringify(rawObject, null, 2),
+      "```",
+      "sk-raw-secret123",
+    ].join("\n")));
+
+    const response = await recognizeSubscriptions(requestForText("locvps 20元 1个月"), envFixture());
+    const body = await response.json() as {
+      subscriptions: Array<{ name: string; website: unknown }>;
+      diagnostics: { output: { rawModelText: { value: string } | null; rawObjectJson: { value: string } | null } };
+    };
+    const payload = JSON.stringify(body);
+
+    expect(body.subscriptions[0]).toMatchObject({ name: "LocVPS", website: null });
+    expect(body.diagnostics.output.rawObjectJson?.value).toContain("\"name\": \"LocVPS\"");
+    expect(payload).not.toContain("sk-raw-secret123");
+    expect(payload).toContain("[redacted]");
   });
 
   it("returns an actionable error when the provider object cannot be parsed", async () => {

@@ -197,9 +197,9 @@ const generatedNumberSchema = z.union([z.number().finite(), z.string().trim().ma
 const generatedIntegerSchema = z.union([z.number().int(), z.string().trim().max(80)]).nullable();
 const generatedTextSchema = z.string().trim().max(5000).nullable();
 const generatedWebsiteFieldSchema = z.object({
-  value: z.string().trim().max(5000),
+  value: z.string().trim().max(5000).nullable(),
   source: suggestedFieldSourceSchema,
-}).strict().nullable().describe("Official or user-provided website for the subscribed service. Use null when the official site is ambiguous or unknown.");
+}).strict().nullable().describe("Official or user-provided website for the subscribed service. Use null for the entire website field when the official site is ambiguous or unknown.");
 const generatedNotesFieldSchema = z.object({
   value: z.string().trim().max(5000).nullable().describe("Concise neutral service/site description. Must be non-null for describable services; not a category, import advice, confirmation reminder, or AI process note."),
   source: generatedNotesSourceSchema,

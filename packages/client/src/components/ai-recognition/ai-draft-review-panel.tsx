@@ -33,6 +33,7 @@ interface AIDraftReviewPanelProps {
   settings: AppSettings;
   availableTags?: readonly string[];
   draftBlockingIssuesById: ReadonlyMap<string, readonly AIDraftBlockingIssue[]>;
+  generationElapsedSeconds: number | null;
   selectedDraftId: string | null;
   onSelectedDraftIdChange: (id: string | null) => void;
   onChangeDraft: (id: string, patch: Partial<AiRecognizedSubscriptionDraft>) => void;
@@ -45,6 +46,7 @@ export function AIDraftReviewPanel({
   settings,
   availableTags = [],
   draftBlockingIssuesById,
+  generationElapsedSeconds,
   selectedDraftId,
   onSelectedDraftIdChange,
   onChangeDraft,
@@ -93,7 +95,11 @@ export function AIDraftReviewPanel({
         <div className="flex min-w-0 flex-col gap-3 border-b border-border bg-secondary/20 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-foreground">{t("aiRecognition.draftsTitle")}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">{t("aiRecognition.draftsCount", { count: drafts.length })}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {generationElapsedSeconds === null
+                ? t("aiRecognition.draftsCount", { count: drafts.length })
+                : t("aiRecognition.draftsCountWithElapsed", { count: drafts.length, seconds: generationElapsedSeconds })}
+            </p>
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-3xl sm:flex-row sm:items-center sm:justify-end">
             <div className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-md border border-border bg-background p-0.5 text-xs">

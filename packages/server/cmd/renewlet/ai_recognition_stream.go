@@ -1,21 +1,25 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/pocketbase/pocketbase/core"
 )
 
 const (
-	aiRecognitionStreamStageInputRead   = "input-read"
-	aiRecognitionStreamStageModelStart  = "model-start"
-	aiRecognitionStreamStageModelStream = "model-stream"
-	aiRecognitionStreamStageRepairStart = "repair-start"
-	aiRecognitionStreamStageValidating  = "validating"
-	aiRecognitionStreamStageFinalizing  = "finalizing"
+	aiRecognitionStreamStageInputRead    = "input-read"
+	aiRecognitionStreamStageModelStart   = "model-start"
+	aiRecognitionStreamStageModelStream  = "model-stream"
+	aiRecognitionStreamStageRepairStart  = "repair-start"
+	aiRecognitionStreamStageValidating   = "validating"
+	aiRecognitionStreamStageFinalizing   = "finalizing"
+	aiRecognitionStreamHeartbeatInterval = 15 * time.Second
 )
 
 type aiRecognitionStreamSink interface {
@@ -54,6 +58,7 @@ type aiRecognitionStreamErrorEvent struct {
 type aiRecognitionSSEWriter struct {
 	response   http.ResponseWriter
 	controller *http.ResponseController
+	mu         sync.Mutex
 }
 
 func handleAIRecognizeSubscriptionsStream(app core.App, e *core.RequestEvent) error {
@@ -63,6 +68,8 @@ func handleAIRecognizeSubscriptionsStream(app core.App, e *core.RequestEvent) er
 	}
 	writer := aiRecognitionSSEWriter{response: e.Response, controller: http.NewResponseController(e.Response)}
 	writer.prepareHeaders()
+	stopHeartbeat := writer.startHeartbeat(e.Request.Context())
+	defer stopHeartbeat()
 	if err := writer.Progress(aiRecognitionStreamStageInputRead); err != nil {
 		return nil
 	}
@@ -90,6 +97,28 @@ func (writer *aiRecognitionSSEWriter) prepareHeaders() {
 	headers.Set("X-Accel-Buffering", "no")
 }
 
+func (writer *aiRecognitionSSEWriter) startHeartbeat(ctx context.Context) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(aiRecognitionStreamHeartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			case <-ticker.C:
+				// SSE comment 只用于代理/浏览器保活，不进入前端 shared event union，也不能承载诊断或 provider 原文。
+				_ = writer.Comment("keep-alive")
+			}
+		}
+	}()
+	return func() {
+		close(done)
+	}
+}
+
 func (writer *aiRecognitionSSEWriter) Progress(stage string) error {
 	return writer.write(aiRecognitionStreamProgressEvent{Type: "recognition/progress", Stage: stage})
 }
@@ -111,6 +140,10 @@ func (writer *aiRecognitionSSEWriter) Error(event aiRecognitionStreamErrorEvent)
 	return writer.write(event)
 }
 
+func (writer *aiRecognitionSSEWriter) Comment(value string) error {
+	return writer.writeFrame(fmt.Sprintf(": %s\n\n", value))
+}
+
 func (writer *aiRecognitionSSEWriter) write(event interface{}) error {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -120,7 +153,13 @@ func (writer *aiRecognitionSSEWriter) write(event interface{}) error {
 	if err := json.Unmarshal(data, &typed); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(writer.response, "event: %s\ndata: %s\n\n", typed.Type, data); err != nil {
+	return writer.writeFrame(fmt.Sprintf("event: %s\ndata: %s\n\n", typed.Type, data))
+}
+
+func (writer *aiRecognitionSSEWriter) writeFrame(frame string) error {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	if _, err := fmt.Fprint(writer.response, frame); err != nil {
 		return err
 	}
 	return writer.controller.Flush()
@@ -134,6 +173,8 @@ func aiRecognitionStreamErrorForError(locale appLocale, err error) aiRecognition
 		message = serverText(locale, "aiRecognition.noSubscriptions")
 		code = "AI_RECOGNITION_EMPTY"
 		reason = "empty"
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		code = "AI_RECOGNITION_TIMEOUT"
 	} else if isAIRecognitionSchemaMismatchError(err) {
 		message = serverText(locale, "aiRecognition.schemaMismatch")
 		code = "AI_RECOGNITION_SCHEMA_MISMATCH"

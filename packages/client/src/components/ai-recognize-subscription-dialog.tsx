@@ -80,6 +80,8 @@ export function AIRecognizeSubscriptionDialog({
   const draftIdRef = useRef(0);
   const recognitionRunRef = useRef(0);
   const recognitionAbortRef = useRef<AbortController | null>(null);
+  const recognitionStartedAtRef = useRef<number | null>(null);
+  const recognitionElapsedSecondsRef = useRef<number | null>(null);
   const [inputMode, setInputMode] = useState<AIRecognitionInputMode>("text");
   const [text, setText] = useState("");
   const [images, setImages] = useState<AIRecognitionImageItem[]>([]);
@@ -97,6 +99,8 @@ export function AIRecognizeSubscriptionDialog({
   const [streamWarningsSeen, setStreamWarningsSeen] = useState(0);
   const [streamTextPreview, setStreamTextPreview] = useState("");
   const [streamReasoningText, setStreamReasoningText] = useState("");
+  const [streamElapsedSeconds, setStreamElapsedSeconds] = useState<number | null>(null);
+  const [draftGenerationElapsedSeconds, setDraftGenerationElapsedSeconds] = useState<number | null>(null);
   const today = todayDateOnlyInTimeZone(new Date(), settings.timezone);
   const aiSettings = settings.aiRecognition;
   const settingsBlocker = getAIRecognitionSettingsBlocker(aiSettings);
@@ -165,6 +169,19 @@ export function AIRecognizeSubscriptionDialog({
     setThinkingControl(normalizeAIThinkingControl(aiSettings.providerType, aiSettings.transportProtocol, aiSettings.model, aiSettings.defaultThinkingControl));
   }, [aiSettings.defaultThinkingControl, aiSettings.model, aiSettings.providerType, aiSettings.transportProtocol, open]);
 
+  useEffect(() => {
+    if (!recognizing || recognitionStartedAtRef.current === null) return;
+    // runId 保护事件顺序，elapsed refs 保护计时器：旧运行结束后不能把耗时写进新草稿。
+    const timer = window.setInterval(() => {
+      const startedAt = recognitionStartedAtRef.current;
+      if (startedAt === null) return;
+      const elapsed = recognitionElapsedSeconds(startedAt);
+      recognitionElapsedSecondsRef.current = elapsed;
+      setStreamElapsedSeconds(elapsed);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [recognizing]);
+
   function cancelActiveRecognitionRun() {
     recognitionAbortRef.current?.abort();
     recognitionAbortRef.current = null;
@@ -188,6 +205,7 @@ export function AIRecognizeSubscriptionDialog({
     setStage("input");
     setDraftsStale(false);
     resetStreamState();
+    setDraftGenerationElapsedSeconds(null);
     setError(null);
     resetImportPreview();
   }
@@ -257,21 +275,24 @@ export function AIRecognizeSubscriptionDialog({
       cancelActiveRecognitionRun();
       recognitionRunRef.current += 1;
       setRecognizing(false);
-      setStreamStatus("stopped");
+      resetStreamState();
     }
     if (drafts.length === 0) return;
     // 输入、图片和思考控制是草稿生成的事实源；返回输入后改动任一项，都必须让旧 preview 失效。
     setDraftsStale(true);
+    setDraftGenerationElapsedSeconds(null);
     resetImportPreview();
   }
 
   function handleBackToInput() {
+    resetStreamState();
     setStage("input");
     setError(null);
   }
 
   function handleBackToDraft() {
     if (drafts.length === 0 || draftsStale) return;
+    resetStreamState();
     setStage("draft");
     setError(null);
   }
@@ -288,7 +309,9 @@ export function AIRecognizeSubscriptionDialog({
     setError(null);
     setRecognitionWarnings([]);
     resetStreamState();
+    startRecognitionElapsed();
     setStreamStatus("running");
+    setDraftGenerationElapsedSeconds(null);
     resetImportPreview();
     try {
       const response = await aiRecognitionService.recognizeSubscriptionsStream(
@@ -304,22 +327,27 @@ export function AIRecognizeSubscriptionDialog({
       );
       if (recognitionRunRef.current !== runId) return;
       // final 事件是唯一可信草稿来源；partial/text/reasoning 只驱动上方状态面板，不能进入导入预览。
+      const elapsedSeconds = freezeRecognitionElapsed();
       resetStreamState();
       const nextDrafts = response.subscriptions.map((draft) => ({
         id: nextDraftId(draftIdRef),
         draft,
       }));
       setDrafts(nextDrafts);
+      setDraftGenerationElapsedSeconds(elapsedSeconds);
       setSelectedDraftId(nextDrafts[0]?.id ?? null);
       setRecognitionWarnings(response.warnings);
       setDraftsStale(false);
       setStage("draft");
     } catch (err) {
       if (recognitionRunRef.current !== runId) return;
+      freezeRecognitionElapsed();
       const aborted = isAbortedApiError(err);
       setStreamStatus(aborted ? "stopped" : "error");
       if (aborted) return;
-      setError(getDisplayErrorMessage(err, t("aiRecognition.recognizeFailedDescription")));
+      const displayError = getDisplayErrorMessage(err, t("aiRecognition.recognizeFailedDescription"));
+      setError(displayError);
+      setStreamStatus("error");
     } finally {
       if (recognitionRunRef.current === runId) {
         setRecognizing(false);
@@ -328,13 +356,38 @@ export function AIRecognizeSubscriptionDialog({
     }
   };
 
+  function dismissStreamOverlay() {
+    if (recognizing) return;
+    // 关闭错误/停止态遮罩只恢复输入工作区；partial 仍然只是进度信号，不能被当成草稿成功。
+    resetStreamState();
+  }
+
   function resetStreamState() {
+    recognitionStartedAtRef.current = null;
+    recognitionElapsedSecondsRef.current = null;
     setStreamStage(null);
     setStreamStatus(null);
     setStreamSubscriptionsSeen(0);
     setStreamWarningsSeen(0);
     setStreamTextPreview("");
     setStreamReasoningText("");
+    setStreamElapsedSeconds(null);
+  }
+
+  function startRecognitionElapsed() {
+    recognitionStartedAtRef.current = performance.now();
+    recognitionElapsedSecondsRef.current = 1;
+    setStreamElapsedSeconds(1);
+  }
+
+  function freezeRecognitionElapsed(): number | null {
+    const startedAt = recognitionStartedAtRef.current;
+    if (startedAt === null) return recognitionElapsedSecondsRef.current;
+    const elapsed = recognitionElapsedSeconds(startedAt);
+    recognitionStartedAtRef.current = null;
+    recognitionElapsedSecondsRef.current = elapsed;
+    setStreamElapsedSeconds(elapsed);
+    return elapsed;
   }
 
   function handleRecognitionStreamEvent(runId: number, event: AiRecognitionStreamEvent) {
@@ -354,10 +407,12 @@ export function AIRecognizeSubscriptionDialog({
         setStreamReasoningText((current) => appendLimitedText(current, event.delta, AI_RECOGNITION_REASONING_PREVIEW_MAX_CHARS));
         break;
       case "recognition/final":
+        freezeRecognitionElapsed();
         setStreamStatus("complete");
         setStreamStage("finalizing");
         break;
       case "recognition/error":
+        freezeRecognitionElapsed();
         setStreamStatus("error");
         break;
     }
@@ -439,8 +494,11 @@ export function AIRecognizeSubscriptionDialog({
       warningsSeen={streamWarningsSeen}
       textPreview={streamTextPreview}
       reasoningText={streamReasoningText}
+      elapsedSeconds={streamElapsedSeconds}
       errorMessage={streamStatus === "error" ? error : null}
+      actionsDisabled={recognizing}
       mobile={isMobile}
+      onDismiss={dismissStreamOverlay}
     />
   ) : null;
 
@@ -522,6 +580,7 @@ export function AIRecognizeSubscriptionDialog({
               settings={settings}
               availableTags={availableTags}
               draftBlockingIssuesById={draftBlockingIssuesById}
+              generationElapsedSeconds={draftGenerationElapsedSeconds}
               selectedDraftId={selectedDraftId}
               onSelectedDraftIdChange={setSelectedDraftId}
               onChangeDraft={updateDraft}
@@ -711,9 +770,7 @@ function revokeImageItem(image: AIRecognitionImageItem) {
 }
 
 function revokeImageItems(images: readonly AIRecognitionImageItem[]) {
-  for (const image of images) {
-    revokeImageItem(image);
-  }
+  for (const image of images) revokeImageItem(image);
 }
 
 function appendLimitedText(current: string, delta: string, maxChars: number): string {
@@ -721,6 +778,9 @@ function appendLimitedText(current: string, delta: string, maxChars: number): st
   const chars = [...next];
   if (chars.length <= maxChars) return next;
   return `...${chars.slice(chars.length - maxChars).join("")}`;
+}
+function recognitionElapsedSeconds(startedAt: number): number {
+  return Math.max(1, Math.ceil((performance.now() - startedAt) / 1000));
 }
 
 function isAbortedApiError(error: unknown): boolean {

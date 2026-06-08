@@ -51,6 +51,7 @@ export class ApiError extends Error {
 /** 请求级 fetch 配置；`timeoutMs` 只在本 client 内消费，不透传给浏览器 fetch。 */
 export type ApiFetchInit = RequestInit & {
   timeoutMs?: number;
+  streamIdleTimeoutMs?: number;
 };
 
 const DEFAULT_JSON_TIMEOUT_MS = 30_000;
@@ -66,10 +67,15 @@ function isAbortError(error: unknown): boolean {
 function createAbortSignal(
   externalSignal: AbortSignal | null | undefined,
   timeoutMs: number,
-): { signal?: AbortSignal; cleanup: () => void; didTimeout: () => boolean } {
+): { signal?: AbortSignal; clearTimeout: () => void; cleanup: () => void; didTimeout: () => boolean; abortForTimeout: () => void } {
   const normalizedTimeout = Number.isFinite(timeoutMs) ? Math.floor(timeoutMs) : 0;
   if (!externalSignal && normalizedTimeout <= 0) {
-    return { cleanup: () => undefined, didTimeout: () => false };
+    return {
+      clearTimeout: () => undefined,
+      cleanup: () => undefined,
+      didTimeout: () => false,
+      abortForTimeout: () => undefined,
+    };
   }
 
   // 将外部取消和本地超时合并成一个 signal，调用方无需关心哪个来源触发 abort。
@@ -78,6 +84,15 @@ function createAbortSignal(
   let timedOut = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
 
+  const clearLocalTimeout = () => {
+    if (!timeout) return;
+    clearTimeout(timeout);
+    timeout = null;
+  };
+  const abortForTimeout = () => {
+    timedOut = true;
+    controller.abort();
+  };
   const abortFromExternal = () => controller.abort();
   if (externalSignal) {
     if (externalSignal.aborted) {
@@ -88,20 +103,82 @@ function createAbortSignal(
   }
 
   if (normalizedTimeout > 0) {
-    timeout = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, normalizedTimeout);
+    timeout = setTimeout(abortForTimeout, normalizedTimeout);
   }
 
   return {
     signal: controller.signal,
+    clearTimeout: clearLocalTimeout,
     cleanup: () => {
-      if (timeout) clearTimeout(timeout);
+      clearLocalTimeout();
       externalSignal?.removeEventListener("abort", abortFromExternal);
     },
     didTimeout: () => timedOut,
+    abortForTimeout,
   };
+}
+
+function createStreamIdleWatchdog(
+  abort: ReturnType<typeof createAbortSignal>,
+  timeoutMs: number | null | undefined,
+): { reset: () => void; cleanup: () => void } {
+  const normalizedTimeout = Number.isFinite(timeoutMs ?? 0) ? Math.floor(timeoutMs ?? 0) : 0;
+  if (normalizedTimeout <= 0) {
+    return { reset: () => undefined, cleanup: () => undefined };
+  }
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const clear = () => {
+    if (!timeout) return;
+    clearTimeout(timeout);
+    timeout = null;
+  };
+  const reset = () => {
+    clear();
+    timeout = setTimeout(() => {
+      abort.abortForTimeout();
+    }, normalizedTimeout);
+  };
+  return { reset, cleanup: clear };
+}
+
+function responseWithStreamActivity(response: Response, onChunk: () => void, signal: AbortSignal | undefined): Response {
+  if (!response.body) return response;
+  const reader = response.body.getReader();
+  let removeAbortListener: (() => void) | null = null;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (!signal) return;
+      const abortStream = () => {
+        controller.error(new DOMException("Aborted", "AbortError"));
+        void reader.cancel();
+      };
+      if (signal.aborted) {
+        abortStream();
+        return;
+      }
+      signal.addEventListener("abort", abortStream, { once: true });
+      removeAbortListener = () => signal.removeEventListener("abort", abortStream);
+    },
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        removeAbortListener?.();
+        controller.close();
+        return;
+      }
+      onChunk();
+      controller.enqueue(value);
+    },
+    async cancel(reason) {
+      removeAbortListener?.();
+      await reader.cancel(reason);
+    },
+  });
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
 }
 
 async function parseJsonSafely(response: Response): Promise<unknown> {
@@ -221,6 +298,7 @@ async function fetchWithApiBoundary(input: RequestInfo, init?: ApiFetchInit): Pr
   response: Response;
 }> {
   const { timeoutMs = DEFAULT_JSON_TIMEOUT_MS, signal: externalSignal, ...fetchInit } = init ?? {};
+  delete (fetchInit as { streamIdleTimeoutMs?: number }).streamIdleTimeoutMs;
   const headers = buildApiHeaders(init?.headers, fetchInit.body ?? null);
   const abort = createAbortSignal(externalSignal, timeoutMs);
   try {
@@ -294,6 +372,9 @@ export async function apiFetchStream<T>(
   consume: (response: Response) => Promise<T>,
 ): Promise<T> {
   const { abort, response } = await fetchWithApiBoundary(input, init);
+  abort.clearTimeout();
+  // 流式 API 的首包和后续 chunk 是两类风险：拿到响应头后只保留 idle watchdog，避免真实 SSE 仍在推进时被总时长计时器误杀。
+  const idleWatchdog = createStreamIdleWatchdog(abort, init.streamIdleTimeoutMs);
   try {
     if (!response.ok) {
       const json = await parseJsonSafely(response);
@@ -303,8 +384,10 @@ export async function apiFetchStream<T>(
       }
       throw new ApiError(message, response.status, json, getErrorCode(json));
     }
+    idleWatchdog.reset();
+    const responseForConsume = responseWithStreamActivity(response, idleWatchdog.reset, abort.signal);
     try {
-      return await consume(response);
+      return await consume(responseForConsume);
     } catch (e: unknown) {
       if (abort.didTimeout()) {
         throw new ApiError(translate(getApiLocale(), "error.timeout"), 0, undefined, "timeout");
@@ -315,6 +398,7 @@ export async function apiFetchStream<T>(
       throw e;
     }
   } finally {
+    idleWatchdog.cleanup();
     abort.cleanup();
   }
 }

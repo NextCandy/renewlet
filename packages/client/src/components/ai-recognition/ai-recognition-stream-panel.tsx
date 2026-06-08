@@ -1,4 +1,5 @@
-import { Activity, AlertTriangle, Brain, CheckCircle2, ChevronDown, Loader2, MessageSquareText } from "lucide-react";
+import { Activity, AlertTriangle, Brain, CheckCircle2, ChevronDown, Loader2, MessageSquareText, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import type { AiRecognitionStreamStage } from "@/lib/api/schemas/ai-recognition";
@@ -13,8 +14,11 @@ interface AIRecognitionStreamPanelProps {
   warningsSeen: number;
   textPreview: string;
   reasoningText: string;
+  elapsedSeconds: number | null;
   errorMessage?: string | null;
   mobile?: boolean;
+  actionsDisabled?: boolean;
+  onDismiss?: () => void;
 }
 
 const STAGE_ORDER: AiRecognitionStreamStage[] = [
@@ -49,12 +53,20 @@ export function AIRecognitionStreamPanel({
   warningsSeen,
   textPreview,
   reasoningText,
+  elapsedSeconds,
   errorMessage = null,
   mobile = false,
+  actionsDisabled = false,
+  onDismiss,
 }: AIRecognitionStreamPanelProps) {
   const { t } = useI18n();
   const activeIndex = stage ? STAGE_ORDER.indexOf(stage) : -1;
   const hasReasoning = reasoningText.trim().length > 0;
+  const canDismiss = status !== "running" && Boolean(onDismiss);
+  const stageLabel = stage ? t(STAGE_LABEL_KEYS[stage]) : t("aiRecognition.streamWaiting");
+  const elapsedLabel = elapsedSeconds === null
+    ? null
+    : t(status === "running" ? "aiRecognition.elapsedRunning" : "aiRecognition.elapsedFinal", { seconds: elapsedSeconds });
   const statusIcon = status === "running"
     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
     : status === "complete"
@@ -68,7 +80,7 @@ export function AIRecognitionStreamPanel({
         "max-h-full w-full min-w-0 max-w-[28rem] overflow-y-auto rounded-lg border border-border bg-card/95 p-3 shadow-lg shadow-black/10",
         mobile ? "space-y-2" : "space-y-3",
       )}
-      role={status === "error" ? "alert" : "status"}
+      role="status"
       aria-live="polite"
       aria-label={t("aiRecognition.streamTitle")}
     >
@@ -80,7 +92,13 @@ export function AIRecognitionStreamPanel({
           <div className="min-w-0 pt-0.5">
             <h3 className="truncate text-sm font-semibold text-foreground">{t("aiRecognition.streamTitle")}</h3>
             <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">
-              {stage ? t(STAGE_LABEL_KEYS[stage]) : t("aiRecognition.streamWaiting")}
+              <span>{stageLabel}</span>
+              {elapsedLabel ? (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span aria-hidden={status === "running" ? "true" : undefined} className="tabular-nums">{elapsedLabel}</span>
+                </>
+              ) : null}
             </p>
           </div>
         </div>
@@ -119,7 +137,7 @@ export function AIRecognitionStreamPanel({
       </dl>
 
       {errorMessage ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs leading-5 text-destructive">
+        <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs leading-5 text-destructive">
           {errorMessage}
         </p>
       ) : null}
@@ -149,6 +167,22 @@ export function AIRecognitionStreamPanel({
             {reasoningText}
           </pre>
         </details>
+      ) : null}
+
+      {canDismiss ? (
+        <div className="flex border-t border-border pt-2 sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-border"
+            disabled={actionsDisabled}
+            onClick={onDismiss}
+          >
+            <X className="h-3.5 w-3.5" />
+            {t("common.close")}
+          </Button>
+        </div>
       ) : null}
     </aside>
   );

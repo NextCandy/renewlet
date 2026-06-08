@@ -113,11 +113,36 @@ describe("aiRecognitionService", () => {
     })).resolves.toEqual(response);
 
     expect(mocks.apiFetchStream.mock.calls[0]?.[0]).toBe("/api/app/ai/subscriptions/recognize/stream");
-    const init = mocks.apiFetchStream.mock.calls[0]?.[1] as RequestInit & { timeoutMs: number };
-    expect(init).toMatchObject({ method: "POST", timeoutMs: 120_000 });
+    const init = mocks.apiFetchStream.mock.calls[0]?.[1] as RequestInit & { timeoutMs: number; streamIdleTimeoutMs: number };
+    expect(init).toMatchObject({ method: "POST", timeoutMs: 30_000, streamIdleTimeoutMs: 120_000 });
     expect(init.signal).toBe(controller.signal);
     expect(init.body).toBeInstanceOf(FormData);
     expect((init.body as FormData).get("text")).toBe("github copilot 20刀 一个月");
+    expect(events).toEqual([{ type: "recognition/final", response }]);
+  });
+
+  it("ignores SSE comment heartbeats while parsing recognition events", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        controller.enqueue(encoder.encode(`event: recognition/final\ndata: ${JSON.stringify({ type: "recognition/final", response })}\n\n`));
+        controller.close();
+      },
+    });
+    mocks.apiFetchStream.mockImplementationOnce(async (_input: string, _init: RequestInit, consume: (response: Response) => Promise<unknown>) => (
+      await consume(new Response(stream))
+    ));
+    const events: unknown[] = [];
+
+    await expect(aiRecognitionService.recognizeSubscriptionsStream({
+      text: "github copilot 20刀 一个月",
+      images: [],
+      thinkingControl: null,
+    }, {
+      onEvent: (event) => events.push(event),
+    })).resolves.toEqual(response);
+
     expect(events).toEqual([{ type: "recognition/final", response }]);
   });
 

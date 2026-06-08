@@ -1,21 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/textproto"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/router"
 	"github.com/zendev-sh/goai"
 	"github.com/zendev-sh/goai/provider"
 )
@@ -190,6 +185,47 @@ func TestGoAIRecognitionRunnerFallsBackWhenRepairStillMissesNotes(t *testing.T) 
 	}
 }
 
+func TestGoAIRecognitionRunnerRecoversRawJSONWhenStructuredObjectRejected(t *testing.T) {
+	raw := aiGeneratedResponseForTest(aiGeneratedDraftForTest(
+		"LocVPS",
+		aiGeneratedNotesField{Value: stringRef("LocVPS 是提供 VPS 和云主机相关产品或服务的订阅服务。"), Source: "suggested"},
+		[]string{"VPS", "云主机"},
+	))
+	raw.Subscriptions[0].Website = &aiGeneratedSuggestedTextField{Value: nil, Source: "suggested"}
+	previous := generateAIRecognitionObjectForRunner
+	generateAIRecognitionObjectForRunner = func(context.Context, provider.LanguageModel, aiRecognitionInput, string, string) (aiRecognitionGeneration, error) {
+		return aiRecognitionGeneration{
+			capture: aiRecognitionCapture{
+				rawModelText: "```json\n" + resultStringFromAIObject(raw) + "\n```",
+				finishReason: "stop",
+			},
+		}, errors.New("No object generated: response did not match schema.")
+	}
+	defer func() {
+		generateAIRecognitionObjectForRunner = previous
+	}()
+
+	response, err := goaiRecognitionRunner{}.Recognize(
+		context.Background(),
+		aiRecognitionSettings{ProviderType: aiProviderTypeOpenAI, TransportProtocol: aiProtocolOpenAIChat, Model: "gpt-5.1", APIKey: "sk-test"},
+		aiRecognitionInput{Text: "locvps 20元 1个月", MaxOutputTokens: 12000},
+		localeZhCN,
+		"Asia/Shanghai",
+		"CNY",
+		aiRecognitionConfigContext{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := response.Subscriptions[0]
+	if draft.Name != "LocVPS" || draft.Website != nil {
+		t.Fatalf("raw JSON recovery should keep draft and clean nullable website: %#v", draft)
+	}
+	if response.Diagnostics.Output.RawModelText == nil || !strings.Contains(response.Diagnostics.Output.RawModelText.Value, "LocVPS") {
+		t.Fatalf("diagnostics should keep sanitized raw text for recovered object: %#v", response.Diagnostics.Output.RawModelText)
+	}
+}
+
 func TestGoAIRecognitionRunnerStreamsProgressPartialAndFinal(t *testing.T) {
 	restore := stubAIRecognitionStreamGeneration(t, []aiGeneratedRecognizeResponse{
 		aiGeneratedResponseForTest(aiGeneratedDraftForTest(
@@ -230,6 +266,74 @@ func TestGoAIRecognitionRunnerStreamsProgressPartialAndFinal(t *testing.T) {
 	}
 }
 
+func TestGoAIRecognitionRunnerStreamsRecoveredRawJSONFinal(t *testing.T) {
+	raw := aiGeneratedResponseForTest(aiGeneratedDraftForTest(
+		"LocVPS",
+		aiGeneratedNotesField{Value: stringRef("LocVPS 是提供 VPS 和云主机相关产品或服务的订阅服务。"), Source: "suggested"},
+		[]string{"VPS", "云主机"},
+	))
+	raw.Subscriptions[0].Website = &aiGeneratedSuggestedTextField{Value: nil, Source: "suggested"}
+	previous := streamAIRecognitionObjectForRunner
+	streamAIRecognitionObjectForRunner = func(context.Context, provider.LanguageModel, aiRecognitionInput, string, string, aiRecognitionStreamSink) (aiRecognitionGeneration, error) {
+		return aiRecognitionGeneration{
+			capture: aiRecognitionCapture{
+				rawModelText: resultStringFromAIObject(raw),
+				finishReason: "stop",
+			},
+		}, errors.New("No object generated: response did not match schema.")
+	}
+	defer func() {
+		streamAIRecognitionObjectForRunner = previous
+	}()
+	sink := &recordingAIRecognitionStreamSink{}
+
+	err := goaiRecognitionRunner{}.Stream(
+		context.Background(),
+		aiRecognitionSettings{ProviderType: aiProviderTypeOpenAI, TransportProtocol: aiProtocolOpenAIChat, Model: "gpt-5.1", APIKey: "sk-test"},
+		aiRecognitionInput{Text: "locvps 20元 1个月", MaxOutputTokens: 12000},
+		localeZhCN,
+		"Asia/Shanghai",
+		"CNY",
+		aiRecognitionConfigContext{},
+		sink,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sink.progress, []string{
+		aiRecognitionStreamStageModelStart,
+		aiRecognitionStreamStageValidating,
+		aiRecognitionStreamStageFinalizing,
+	}) {
+		t.Fatalf("recovered stream progress mismatch: %#v", sink.progress)
+	}
+	if sink.final == nil || sink.final.Subscriptions[0].Website != nil {
+		t.Fatalf("recovered stream final should clean nullable website: %#v", sink.final)
+	}
+}
+
+func TestAIRecognitionPartialProgressDedupe(t *testing.T) {
+	sink := &recordingAIRecognitionStreamSink{}
+	last := aiRecognitionStreamPartialEvent{}
+	for _, item := range []aiRecognitionStreamPartialEvent{
+		{SubscriptionsSeen: 0, WarningsSeen: 0},
+		{SubscriptionsSeen: 1, WarningsSeen: 0},
+		{SubscriptionsSeen: 1, WarningsSeen: 0},
+		{SubscriptionsSeen: 1, WarningsSeen: 1},
+	} {
+		if err := emitAIRecognitionPartialIfChanged(sink, &last, item.SubscriptionsSeen, item.WarningsSeen); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []aiRecognitionStreamPartialEvent{
+		{Type: "recognition/partial", SubscriptionsSeen: 1, WarningsSeen: 0},
+		{Type: "recognition/partial", SubscriptionsSeen: 1, WarningsSeen: 1},
+	}
+	if !reflect.DeepEqual(sink.partials, want) {
+		t.Fatalf("partial dedupe mismatch: %#v", sink.partials)
+	}
+}
+
 func TestAIRecognitionSSEWriterHeadersEventsAndSanitizedError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	writer := aiRecognitionSSEWriter{
@@ -241,6 +345,9 @@ func TestAIRecognitionSSEWriterHeadersEventsAndSanitizedError(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := writer.Partial(2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Comment("keep-alive"); err != nil {
 		t.Fatal(err)
 	}
 	if err := writer.Final(aiRecognizeResponse{
@@ -273,6 +380,7 @@ func TestAIRecognitionSSEWriterHeadersEventsAndSanitizedError(t *testing.T) {
 		`"stage":"input-read"`,
 		"event: recognition/partial",
 		`"subscriptionsSeen":2`,
+		": keep-alive",
 		"event: recognition/final",
 		"event: recognition/error",
 		"[redacted]",
@@ -283,6 +391,13 @@ func TestAIRecognitionSSEWriterHeadersEventsAndSanitizedError(t *testing.T) {
 	}
 	if strings.Contains(body, "sk-stream-secret123") {
 		t.Fatalf("SSE error leaked provider secret:\n%s", body)
+	}
+}
+
+func TestAIRecognitionStreamErrorCodeForTimeout(t *testing.T) {
+	streamErr := aiRecognitionStreamErrorForError(localeZhCN, context.DeadlineExceeded)
+	if streamErr.Code != "AI_RECOGNITION_TIMEOUT" {
+		t.Fatalf("timeout code mismatch: %#v", streamErr)
 	}
 }
 
@@ -410,6 +525,8 @@ func TestAIRecognitionPromptUsesSharedJSONContract(t *testing.T) {
 		"value=crypto",
 		"provided category values exactly",
 		"website with the canonical https URL",
+		"output website: null",
+		`never output {"value": null, "source": "suggested"}`,
 		"notes must always be an object",
 		"notes.value must be non-null for describable services",
 		"dynamic evidence from this request",
@@ -488,6 +605,10 @@ func TestAIRecognitionGeneratedSchemaRequiresCompleteDraftFields(t *testing.T) {
 	if !slices.Contains(notesSchema.Properties["source"].Enum, "none") {
 		t.Fatalf("generated notes source should include none, got %#v", notesSchema.Properties["source"].Enum)
 	}
+	websiteValueType, _ := json.Marshal(schema.Properties["subscriptions"].Items.Properties["website"].Properties["value"].Type)
+	if !strings.Contains(string(websiteValueType), "null") {
+		t.Fatalf("generated website value should allow null at generation boundary, got %s", websiteValueType)
+	}
 	for field, want := range map[string]string{
 		"website":       "Official or user-provided website",
 		"notes":         "service/site description",
@@ -557,221 +678,4 @@ func TestAIRecognitionDiagnosticsRedactsSecretsAndImageData(t *testing.T) {
 	if diagnostics.Output.RawModelText == nil || !strings.Contains(diagnostics.Output.RawModelText.Value, "[redacted]") {
 		t.Fatalf("raw model text was not redacted: %#v", diagnostics.Output.RawModelText)
 	}
-}
-
-func testAIRecognitionDiagnostics() aiRecognitionDiagnostics {
-	return buildAIRecognitionDiagnostics(
-		aiRecognitionSettings{ProviderType: aiProviderTypeOpenAI, TransportProtocol: aiProtocolOpenAIChat, Model: "gpt-5.1"},
-		aiRecognitionInput{Text: "dmit 15元 1个月", MaxOutputTokens: 12000},
-		"Return JSON only",
-		"Extract subscriptions",
-		`{"subscriptions":[],"warnings":[]}`,
-		map[string]any{"subscriptions": []any{}, "warnings": []any{}},
-		map[string]any{"inputTokens": 1, "outputTokens": 1},
-		"stop",
-		map[string]any{"openai": map[string]any{"id": "resp_1"}},
-	)
-}
-
-type aiConnectionTestModel struct {
-	calls  int
-	params provider.GenerateParams
-	err    error
-}
-
-func (model *aiConnectionTestModel) ModelID() string {
-	return "connection-test"
-}
-
-func (model *aiConnectionTestModel) DoGenerate(_ context.Context, params provider.GenerateParams) (*provider.GenerateResult, error) {
-	model.calls += 1
-	model.params = params
-	if model.err != nil {
-		return nil, model.err
-	}
-	return &provider.GenerateResult{Text: "OK"}, nil
-}
-
-func (model *aiConnectionTestModel) DoStream(context.Context, provider.GenerateParams) (*provider.StreamResult, error) {
-	return nil, errors.New("stream not used in connection test")
-}
-
-func readAIRecognitionMultipartForTest(t *testing.T, fields map[string]string) aiRecognitionInput {
-	t.Helper()
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for name, value := range fields {
-		if err := writer.WriteField(name, value); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/api/app/ai/subscriptions/recognize", &body)
-	req.Header.Set("content-type", writer.FormDataContentType())
-	input, err := readAIRecognitionMultipart(&core.RequestEvent{
-		Event: router.Event{
-			Request:  req,
-			Response: httptest.NewRecorder(),
-		},
-	}, localeZhCN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return input
-}
-
-func readAIRecognitionMultipartImagesForTest(count int) (aiRecognitionInput, error) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for index := 0; index < count; index++ {
-		header := textproto.MIMEHeader{}
-		header.Set("Content-Disposition", `form-data; name="images[]"; filename="image.png"`)
-		header.Set("Content-Type", "image/png")
-		part, err := writer.CreatePart(header)
-		if err != nil {
-			return aiRecognitionInput{}, err
-		}
-		if _, err := part.Write([]byte{0x89, 0x50, 0x4e, 0x47}); err != nil {
-			return aiRecognitionInput{}, err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return aiRecognitionInput{}, err
-	}
-	req := httptest.NewRequest(http.MethodPost, "/api/app/ai/subscriptions/recognize", &body)
-	req.Header.Set("content-type", writer.FormDataContentType())
-	return readAIRecognitionMultipart(&core.RequestEvent{
-		Event: router.Event{
-			Request:  req,
-			Response: httptest.NewRecorder(),
-		},
-	}, localeZhCN)
-}
-
-func stubAIRecognitionGeneration(t *testing.T, responses []aiGeneratedRecognizeResponse) func() {
-	t.Helper()
-	previous := generateAIRecognitionObjectForRunner
-	index := 0
-	generateAIRecognitionObjectForRunner = func(_ context.Context, _ provider.LanguageModel, _ aiRecognitionInput, _ string, _ string) (aiRecognitionGeneration, error) {
-		t.Helper()
-		if index >= len(responses) {
-			t.Fatalf("unexpected AI generation call %d", index+1)
-		}
-		response := responses[index]
-		index++
-		return aiRecognitionGeneration{
-			result: &goai.ObjectResult[aiGeneratedRecognizeResponse]{Object: response},
-			capture: aiRecognitionCapture{
-				rawModelText: resultStringFromAIObject(response),
-				finishReason: "stop",
-			},
-		}, nil
-	}
-	return func() {
-		generateAIRecognitionObjectForRunner = previous
-	}
-}
-
-func stubAIRecognitionStreamGeneration(t *testing.T, responses []aiGeneratedRecognizeResponse) func() {
-	t.Helper()
-	previous := streamAIRecognitionObjectForRunner
-	index := 0
-	streamAIRecognitionObjectForRunner = func(_ context.Context, _ provider.LanguageModel, _ aiRecognitionInput, _ string, _ string, sink aiRecognitionStreamSink) (aiRecognitionGeneration, error) {
-		t.Helper()
-		if index >= len(responses) {
-			t.Fatalf("unexpected AI stream generation call %d", index+1)
-		}
-		response := responses[index]
-		index++
-		if err := sink.Progress(aiRecognitionStreamStageModelStream); err != nil {
-			return aiRecognitionGeneration{}, err
-		}
-		if err := sink.Partial(len(response.Subscriptions), len(response.Warnings)); err != nil {
-			return aiRecognitionGeneration{}, err
-		}
-		return aiRecognitionGeneration{
-			result: &goai.ObjectResult[aiGeneratedRecognizeResponse]{Object: response},
-			capture: aiRecognitionCapture{
-				rawModelText: resultStringFromAIObject(response),
-				finishReason: "stop",
-			},
-		}, nil
-	}
-	return func() {
-		streamAIRecognitionObjectForRunner = previous
-	}
-}
-
-type recordingAIRecognitionStreamSink struct {
-	progress []string
-	partials []aiRecognitionStreamPartialEvent
-	final    *aiRecognizeResponse
-}
-
-func (sink *recordingAIRecognitionStreamSink) Progress(stage string) error {
-	sink.progress = append(sink.progress, stage)
-	return nil
-}
-
-func (sink *recordingAIRecognitionStreamSink) Partial(subscriptionsSeen int, warningsSeen int) error {
-	sink.partials = append(sink.partials, aiRecognitionStreamPartialEvent{
-		Type:              "recognition/partial",
-		SubscriptionsSeen: subscriptionsSeen,
-		WarningsSeen:      warningsSeen,
-	})
-	return nil
-}
-
-func (sink *recordingAIRecognitionStreamSink) Final(response aiRecognizeResponse) error {
-	sink.final = &response
-	return nil
-}
-
-func aiGeneratedResponseForTest(draft aiGeneratedSubscriptionDraft) aiGeneratedRecognizeResponse {
-	return aiGeneratedRecognizeResponse{
-		Subscriptions: []aiGeneratedSubscriptionDraft{draft},
-		Warnings:      []string{},
-	}
-}
-
-func aiGeneratedDraftForTest(name string, notes aiGeneratedNotesField, tags []string) aiGeneratedSubscriptionDraft {
-	currency := "CNY"
-	billingCycle := "monthly"
-	status := "active"
-	return aiGeneratedSubscriptionDraft{
-		Name:                         name,
-		Price:                        15,
-		Currency:                     &currency,
-		BillingCycle:                 &billingCycle,
-		CustomDays:                   nil,
-		CustomCycleUnit:              nil,
-		OneTimeTermCount:             nil,
-		OneTimeTermUnit:              nil,
-		Category:                     nil,
-		Status:                       &status,
-		PaymentMethod:                nil,
-		StartDate:                    nil,
-		NextBillingDate:              nil,
-		AutoCalculateNextBillingDate: boolRef(true),
-		TrialEndDate:                 nil,
-		Website:                      &aiSuggestedTextField{Value: "https://hostdzire.com/", Source: "suggested"},
-		Notes:                        &notes,
-		Tags:                         tags,
-		ReminderDays:                 nil,
-		RepeatReminderEnabled:        nil,
-		RepeatReminderInterval:       nil,
-		RepeatReminderWindow:         nil,
-		Confidence:                   "high",
-		Warnings:                     []string{},
-	}
-}
-
-func stringRef(value string) *string {
-	return &value
-}
-
-func boolRef(value bool) *bool {
-	return &value
 }

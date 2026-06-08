@@ -45,32 +45,22 @@ func (goaiRecognitionRunner) Recognize(
 
 	systemPrompt := buildAIRecognitionSystemPrompt()
 	userPrompt := buildAIRecognitionUserPrompt(input.Text, timezone, defaultCurrency, len(input.Images), locale, configContext)
-	generation, err := generateAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, userPrompt)
+	generateForPrompt := func(nextUserPrompt string) (aiRecognitionGeneration, error) {
+		return generateAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, nextUserPrompt)
+	}
+	generation, err := generateForPrompt(userPrompt)
 	if err != nil {
 		if generation.capture.rawModelText == "" {
 			generation.capture.rawModelText = aiRecognitionRawTextFromError(err)
 		}
-		diagnostics := buildAIRecognitionDiagnostics(settings, input, systemPrompt, userPrompt, generation.capture.rawModelText, nil, generation.capture.usage, generation.capture.finishReason, generation.capture.providerMetadata)
-		return aiRecognizeResponse{}, &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
-	}
-	diagnostics := buildAIRecognitionDiagnosticsForGeneration(settings, input, systemPrompt, userPrompt, generation)
-	response, err := normalizeAIGeneratedRecognizeResponse(generation.result.Object, settings.ProviderType, settings.TransportProtocol, settings.Model, diagnostics, configContext)
-	if err != nil {
-		return aiRecognizeResponse{}, &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
-	}
-	if missingNames := missingDescribableAINoteNames(response.Subscriptions); len(missingNames) > 0 {
-		repairPrompt := buildAIRecognitionRepairUserPrompt(userPrompt, generation.result.Object, missingNames)
-		if repairedGeneration, repairErr := generateAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, repairPrompt); repairErr == nil {
-			repairDiagnostics := buildAIRecognitionDiagnosticsForGeneration(settings, input, systemPrompt, repairPrompt, repairedGeneration)
-			if repairedResponse, normalizeErr := normalizeAIGeneratedRecognizeResponse(repairedGeneration.result.Object, settings.ProviderType, settings.TransportProtocol, settings.Model, repairDiagnostics, configContext); normalizeErr == nil {
-				diagnostics = repairDiagnostics
-				response = repairedResponse
-			}
+		if recovered, ok := recoverAIRecognitionGenerationFromRawText(generation.capture.rawModelText, generation.capture); ok {
+			generation = recovered
+		} else {
+			diagnostics := buildAIRecognitionDiagnostics(settings, input, systemPrompt, userPrompt, generation.capture.rawModelText, nil, generation.capture.usage, generation.capture.finishReason, generation.capture.providerMetadata)
+			return aiRecognizeResponse{}, &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
 		}
-		response.Diagnostics = diagnostics
-		response = fillMissingAINotesWithDynamicFallback(response, locale, configContext)
 	}
-	return response, nil
+	return finalizeAIRecognitionGeneration(settings, input, locale, configContext, systemPrompt, userPrompt, generation, nil, generateForPrompt)
 }
 
 func (goaiRecognitionRunner) Stream(
@@ -98,28 +88,48 @@ func (goaiRecognitionRunner) Stream(
 	if err := sink.Progress(aiRecognitionStreamStageModelStart); err != nil {
 		return err
 	}
-	generation, err := streamAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, userPrompt, sink)
+	generateForPrompt := func(nextUserPrompt string) (aiRecognitionGeneration, error) {
+		return streamAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, nextUserPrompt, sink)
+	}
+	generation, err := generateForPrompt(userPrompt)
 	if err != nil {
 		if generation.capture.rawModelText == "" {
 			generation.capture.rawModelText = aiRecognitionRawTextFromError(err)
 		}
-		diagnostics := buildAIRecognitionDiagnostics(settings, input, systemPrompt, userPrompt, generation.capture.rawModelText, nil, generation.capture.usage, generation.capture.finishReason, generation.capture.providerMetadata)
-		return &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
+		if recovered, ok := recoverAIRecognitionGenerationFromRawText(generation.capture.rawModelText, generation.capture); ok {
+			generation = recovered
+		} else {
+			diagnostics := buildAIRecognitionDiagnostics(settings, input, systemPrompt, userPrompt, generation.capture.rawModelText, nil, generation.capture.usage, generation.capture.finishReason, generation.capture.providerMetadata)
+			return &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
+		}
 	}
-	if err := sink.Progress(aiRecognitionStreamStageValidating); err != nil {
+	response, err := finalizeAIRecognitionGeneration(settings, input, locale, configContext, systemPrompt, userPrompt, generation, sink.Progress, generateForPrompt)
+	if err != nil {
 		return err
+	}
+	return sink.Final(response)
+}
+
+func finalizeAIRecognitionGeneration(settings aiRecognitionSettings, input aiRecognitionInput, locale appLocale, configContext aiRecognitionConfigContext, systemPrompt string, userPrompt string, initialGeneration aiRecognitionGeneration, progress func(string) error, generateForPrompt func(string) (aiRecognitionGeneration, error)) (aiRecognizeResponse, error) {
+	generation := initialGeneration
+	if progress != nil {
+		if err := progress(aiRecognitionStreamStageValidating); err != nil {
+			return aiRecognizeResponse{}, err
+		}
 	}
 	diagnostics := buildAIRecognitionDiagnosticsForGeneration(settings, input, systemPrompt, userPrompt, generation)
 	response, err := normalizeAIGeneratedRecognizeResponse(generation.result.Object, settings.ProviderType, settings.TransportProtocol, settings.Model, diagnostics, configContext)
 	if err != nil {
-		return &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
+		return aiRecognizeResponse{}, &aiRecognitionRunError{cause: err, diagnostics: diagnostics}
 	}
 	if missingNames := missingDescribableAINoteNames(response.Subscriptions); len(missingNames) > 0 {
-		if err := sink.Progress(aiRecognitionStreamStageRepairStart); err != nil {
-			return err
+		if progress != nil {
+			if err := progress(aiRecognitionStreamStageRepairStart); err != nil {
+				return aiRecognizeResponse{}, err
+			}
 		}
 		repairPrompt := buildAIRecognitionRepairUserPrompt(userPrompt, generation.result.Object, missingNames)
-		if repairedGeneration, repairErr := streamAIRecognitionObjectForRunner(ctx, model, input, systemPrompt, repairPrompt, sink); repairErr == nil {
+		if repairedGeneration, repairErr := generateForPrompt(repairPrompt); repairErr == nil {
 			repairDiagnostics := buildAIRecognitionDiagnosticsForGeneration(settings, input, systemPrompt, repairPrompt, repairedGeneration)
 			if repairedResponse, normalizeErr := normalizeAIGeneratedRecognizeResponse(repairedGeneration.result.Object, settings.ProviderType, settings.TransportProtocol, settings.Model, repairDiagnostics, configContext); normalizeErr == nil {
 				diagnostics = repairDiagnostics
@@ -129,10 +139,12 @@ func (goaiRecognitionRunner) Stream(
 		response.Diagnostics = diagnostics
 		response = fillMissingAINotesWithDynamicFallback(response, locale, configContext)
 	}
-	if err := sink.Progress(aiRecognitionStreamStageFinalizing); err != nil {
-		return err
+	if progress != nil {
+		if err := progress(aiRecognitionStreamStageFinalizing); err != nil {
+			return aiRecognizeResponse{}, err
+		}
 	}
-	return sink.Final(response)
+	return response, nil
 }
 
 func generateAIRecognitionObject(ctx context.Context, model provider.LanguageModel, input aiRecognitionInput, systemPrompt string, userPrompt string) (aiRecognitionGeneration, error) {
@@ -151,6 +163,7 @@ func streamAIRecognitionObject(ctx context.Context, model provider.LanguageModel
 		return aiRecognitionGeneration{capture: capture}, err
 	}
 	streamStarted := false
+	lastPartial := aiRecognitionStreamPartialEvent{}
 	for partial := range stream.PartialObjectStream() {
 		if partial == nil {
 			continue
@@ -161,7 +174,9 @@ func streamAIRecognitionObject(ctx context.Context, model provider.LanguageModel
 				return aiRecognitionGeneration{capture: capture}, err
 			}
 		}
-		if err := sink.Partial(len(partial.Subscriptions), len(partial.Warnings)); err != nil {
+		subscriptionsSeen := len(partial.Subscriptions)
+		warningsSeen := len(partial.Warnings)
+		if err := emitAIRecognitionPartialIfChanged(sink, &lastPartial, subscriptionsSeen, warningsSeen); err != nil {
 			return aiRecognitionGeneration{capture: capture}, err
 		}
 	}
@@ -170,6 +185,70 @@ func streamAIRecognitionObject(ctx context.Context, model provider.LanguageModel
 		err = errAIRecognitionEmptyObject
 	}
 	return aiRecognitionGeneration{result: result, capture: capture}, err
+}
+
+func emitAIRecognitionPartialIfChanged(sink aiRecognitionStreamSink, last *aiRecognitionStreamPartialEvent, subscriptionsSeen int, warningsSeen int) error {
+	if subscriptionsSeen == 0 && warningsSeen == 0 {
+		return nil
+	}
+	if last.SubscriptionsSeen == subscriptionsSeen && last.WarningsSeen == warningsSeen {
+		return nil
+	}
+	// StreamObject 的 partial 只是进度提示，去重避免 UI 被半成品重复刷屏；最终草稿仍只从 Final 写出。
+	last.SubscriptionsSeen = subscriptionsSeen
+	last.WarningsSeen = warningsSeen
+	return sink.Partial(subscriptionsSeen, warningsSeen)
+}
+
+func recoverAIRecognitionGenerationFromRawText(rawModelText string, capture aiRecognitionCapture) (aiRecognitionGeneration, bool) {
+	jsonText := extractFirstAIRecognitionJSONObjectText(rawModelText)
+	if jsonText == "" {
+		return aiRecognitionGeneration{}, false
+	}
+	var object aiGeneratedRecognizeResponse
+	decoder := json.NewDecoder(strings.NewReader(jsonText))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&object); err != nil {
+		return aiRecognitionGeneration{}, false
+	}
+	capture.rawModelText = rawModelText
+	// 生成侧恢复只把 AI SDK 拒收的完整 JSON 拉回 normalize；最终 response schema 仍是唯一可信边界。
+	return aiRecognitionGeneration{result: &goai.ObjectResult[aiGeneratedRecognizeResponse]{Object: object}, capture: capture}, true
+}
+
+func extractFirstAIRecognitionJSONObjectText(text string) string {
+	start := strings.IndexByte(text, '{')
+	if start < 0 {
+		return ""
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for index := start; index < len(text); index++ {
+		char := text[index]
+		if inString {
+			if escaped {
+				escaped = false
+			} else if char == '\\' {
+				escaped = true
+			} else if char == '"' {
+				inString = false
+			}
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return text[start : index+1]
+			}
+		}
+	}
+	return ""
 }
 
 func aiRecognitionObjectOptions(model provider.LanguageModel, input aiRecognitionInput, systemPrompt string, userPrompt string, capture *aiRecognitionCapture) []goai.Option {
@@ -207,6 +286,15 @@ func aiRecognitionObjectOptions(model provider.LanguageModel, input aiRecognitio
 }
 
 func buildAIRecognitionDiagnosticsForGeneration(settings aiRecognitionSettings, input aiRecognitionInput, systemPrompt string, userPrompt string, generation aiRecognitionGeneration) aiRecognitionDiagnostics {
+	usage := interface{}(generation.result.Usage)
+	if generation.capture.usage != nil {
+		usage = generation.capture.usage
+	}
+	finishReason := firstNonBlank(generation.capture.finishReason, string(generation.result.FinishReason))
+	providerMetadata := interface{}(generation.result.ProviderMetadata)
+	if generation.capture.providerMetadata != nil {
+		providerMetadata = generation.capture.providerMetadata
+	}
 	return buildAIRecognitionDiagnostics(
 		settings,
 		input,
@@ -214,9 +302,9 @@ func buildAIRecognitionDiagnosticsForGeneration(settings aiRecognitionSettings, 
 		userPrompt,
 		firstNonBlank(generation.capture.rawModelText, resultStringFromAIObject(generation.result.Object)),
 		generation.result.Object,
-		generation.result.Usage,
-		string(generation.result.FinishReason),
-		generation.result.ProviderMetadata,
+		usage,
+		finishReason,
+		providerMetadata,
 	)
 }
 
@@ -251,9 +339,9 @@ var aiRecognitionGeneratedSchema = json.RawMessage(`{
           "trialEndDate": { "type": ["string", "null"] },
           "website": {
             "type": ["object", "null"],
-            "description": "Official or user-provided website for the subscribed service. Use null when the official site is ambiguous or unknown.",
+            "description": "Official or user-provided website for the subscribed service. Use null for the entire website field when the official site is ambiguous or unknown.",
             "properties": {
-              "value": { "type": "string" },
+              "value": { "type": ["string", "null"] },
               "source": { "type": "string", "enum": ["input", "suggested"] }
             },
             "required": ["value", "source"],

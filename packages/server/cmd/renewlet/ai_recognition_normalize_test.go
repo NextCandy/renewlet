@@ -48,7 +48,8 @@ func TestNormalizeAIGeneratedRecognizeResponse(t *testing.T) {
 	billingCycle := "1个月"
 	category := "数字服务"
 	paymentMethod := "Crypto"
-	website := aiSuggestedTextField{Value: "https://www.apple.com/", Source: "suggested"}
+	websiteValue := "https://www.apple.com/"
+	website := aiGeneratedSuggestedTextField{Value: &websiteValue, Source: "suggested"}
 	notesValue := "DMIT 是提供 VPS、云服务器和网络线路服务的主机商。"
 	notes := aiGeneratedNotesField{Value: &notesValue, Source: "suggested"}
 	configContext := aiRecognitionConfigContext{
@@ -101,6 +102,27 @@ func TestNormalizeAIGeneratedRecognizeResponse(t *testing.T) {
 	}
 	if !reflect.DeepEqual(draft.Tags, []string{"数字服务", "云服务"}) {
 		t.Fatalf("tags should be compacted: %#v", draft.Tags)
+	}
+}
+
+func TestNormalizeAIGeneratedRecognizeResponseCleansNullableWebsiteValue(t *testing.T) {
+	notesValue := "LocVPS 是提供 VPS 和云主机相关产品或服务的订阅服务。"
+	response, err := normalizeAIGeneratedRecognizeResponse(aiGeneratedRecognizeResponse{
+		Subscriptions: []aiGeneratedSubscriptionDraft{{
+			Name:       "LocVPS",
+			Website:    &aiGeneratedSuggestedTextField{Value: nil, Source: "suggested"},
+			Notes:      &aiGeneratedNotesField{Value: &notesValue, Source: "suggested"},
+			Tags:       []string{"VPS"},
+			Confidence: "high",
+			Warnings:   []string{},
+		}},
+		Warnings: []string{},
+	}, aiProviderTypeOpenAI, aiProtocolOpenAIChat, "gpt-5.1", testAIRecognitionDiagnostics(), aiRecognitionConfigContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Subscriptions[0].Website != nil {
+		t.Fatalf("nullable generated website value should be normalized away: %#v", response.Subscriptions[0].Website)
 	}
 }
 

@@ -20,30 +20,35 @@ type aiGeneratedRecognizeResponse struct {
 }
 
 type aiGeneratedSubscriptionDraft struct {
-	Name                         string                 `json:"name"`
-	Price                        interface{}            `json:"price"`
-	Currency                     *string                `json:"currency"`
-	BillingCycle                 *string                `json:"billingCycle"`
-	CustomDays                   interface{}            `json:"customDays"`
-	CustomCycleUnit              *string                `json:"customCycleUnit"`
-	OneTimeTermCount             interface{}            `json:"oneTimeTermCount"`
-	OneTimeTermUnit              *string                `json:"oneTimeTermUnit"`
-	Category                     *string                `json:"category"`
-	Status                       *string                `json:"status"`
-	PaymentMethod                *string                `json:"paymentMethod"`
-	StartDate                    *string                `json:"startDate"`
-	NextBillingDate              *string                `json:"nextBillingDate"`
-	AutoCalculateNextBillingDate *bool                  `json:"autoCalculateNextBillingDate"`
-	TrialEndDate                 *string                `json:"trialEndDate"`
-	Website                      *aiSuggestedTextField  `json:"website"`
-	Notes                        *aiGeneratedNotesField `json:"notes"`
-	Tags                         []string               `json:"tags"`
-	ReminderDays                 interface{}            `json:"reminderDays"`
-	RepeatReminderEnabled        *bool                  `json:"repeatReminderEnabled"`
-	RepeatReminderInterval       *string                `json:"repeatReminderInterval"`
-	RepeatReminderWindow         *string                `json:"repeatReminderWindow"`
-	Confidence                   string                 `json:"confidence"`
-	Warnings                     []string               `json:"warnings"`
+	Name                         string                         `json:"name"`
+	Price                        interface{}                    `json:"price"`
+	Currency                     *string                        `json:"currency"`
+	BillingCycle                 *string                        `json:"billingCycle"`
+	CustomDays                   interface{}                    `json:"customDays"`
+	CustomCycleUnit              *string                        `json:"customCycleUnit"`
+	OneTimeTermCount             interface{}                    `json:"oneTimeTermCount"`
+	OneTimeTermUnit              *string                        `json:"oneTimeTermUnit"`
+	Category                     *string                        `json:"category"`
+	Status                       *string                        `json:"status"`
+	PaymentMethod                *string                        `json:"paymentMethod"`
+	StartDate                    *string                        `json:"startDate"`
+	NextBillingDate              *string                        `json:"nextBillingDate"`
+	AutoCalculateNextBillingDate *bool                          `json:"autoCalculateNextBillingDate"`
+	TrialEndDate                 *string                        `json:"trialEndDate"`
+	Website                      *aiGeneratedSuggestedTextField `json:"website"`
+	Notes                        *aiGeneratedNotesField         `json:"notes"`
+	Tags                         []string                       `json:"tags"`
+	ReminderDays                 interface{}                    `json:"reminderDays"`
+	RepeatReminderEnabled        *bool                          `json:"repeatReminderEnabled"`
+	RepeatReminderInterval       *string                        `json:"repeatReminderInterval"`
+	RepeatReminderWindow         *string                        `json:"repeatReminderWindow"`
+	Confidence                   string                         `json:"confidence"`
+	Warnings                     []string                       `json:"warnings"`
+}
+
+type aiGeneratedSuggestedTextField struct {
+	Value  *string `json:"value"`
+	Source string  `json:"source"`
 }
 
 type aiGeneratedNotesField struct {
@@ -78,7 +83,7 @@ func aiGeneratedDraftToRecognized(draft aiGeneratedSubscriptionDraft) aiRecogniz
 		NextBillingDate:              draft.NextBillingDate,
 		AutoCalculateNextBillingDate: draft.AutoCalculateNextBillingDate,
 		TrialEndDate:                 draft.TrialEndDate,
-		Website:                      draft.Website,
+		Website:                      aiGeneratedSuggestedToSuggestedField(draft.Website),
 		Notes:                        aiGeneratedNotesToSuggestedField(draft.Notes),
 		Tags:                         draft.Tags,
 		RepeatReminderEnabled:        draft.RepeatReminderEnabled,
@@ -96,6 +101,21 @@ func aiGeneratedDraftToRecognized(draft aiGeneratedSubscriptionDraft) aiRecogniz
 	recognized.OneTimeTermCount = parseAIGeneratedPositiveInt(draft.OneTimeTermCount, maxReminderDays, "AI_WARNING_ONE_TIME_TERM_COUNT_INVALID", &recognized.Warnings)
 	recognized.ReminderDays = parseAIGeneratedBoundedInt(draft.ReminderDays, disabledReminderDays, maxReminderDays, "AI_WARNING_REMINDER_DAYS_INVALID", &recognized.Warnings)
 	return recognized
+}
+
+func aiGeneratedSuggestedToSuggestedField(field *aiGeneratedSuggestedTextField) *aiSuggestedTextField {
+	if field == nil || field.Value == nil {
+		return nil
+	}
+	value := strings.TrimSpace(*field.Value)
+	if value == "" {
+		return nil
+	}
+	source := strings.TrimSpace(field.Source)
+	if source != "input" && source != "suggested" {
+		source = "suggested"
+	}
+	return &aiSuggestedTextField{Value: value, Source: source}
 }
 
 func aiGeneratedNotesToSuggestedField(field *aiGeneratedNotesField) *aiSuggestedTextField {

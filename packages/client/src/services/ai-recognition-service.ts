@@ -13,6 +13,9 @@ import {
   type AiThinkingControl,
 } from "@/lib/api/schemas/ai-recognition";
 
+const AI_RECOGNITION_STREAM_RESPONSE_TIMEOUT_MS = 30_000;
+const AI_RECOGNITION_STREAM_IDLE_TIMEOUT_MS = 120_000;
+
 interface RecognizeSubscriptionsInput {
   text: string;
   images: File[];
@@ -54,7 +57,8 @@ export const aiRecognitionService = {
       {
         method: "POST",
         body: createRecognizeSubscriptionsFormData(input),
-        timeoutMs: 120_000,
+        timeoutMs: AI_RECOGNITION_STREAM_RESPONSE_TIMEOUT_MS,
+        streamIdleTimeoutMs: AI_RECOGNITION_STREAM_IDLE_TIMEOUT_MS,
         ...(options.signal ? { signal: options.signal } : {}),
       },
       (response) => consumeRecognitionEventStream(response, handlers.onEvent),

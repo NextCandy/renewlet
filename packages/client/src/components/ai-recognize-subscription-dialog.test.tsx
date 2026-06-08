@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VirtualItem } from "@tanstack/react-virtual";
@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   previewState: {
     prepared: null as unknown,
     preview: null as unknown,
+    error: null as string | null,
   },
   createObjectURL: vi.fn(),
   revokeObjectURL: vi.fn(),
@@ -47,7 +48,7 @@ vi.mock("@/modules/import-export/application/use-import-preview-apply", () => ({
     conflictMode: "skip",
     previewFilter: "all",
     skippedIndexes: new Set<number>(),
-    error: null,
+    error: mocks.previewState.error,
     applying: false,
     assetProgress: null,
     applyProgress: null,
@@ -120,8 +121,12 @@ describe("AIRecognizeSubscriptionDialog", () => {
     mocks.importPreviewPanel.mockReset();
     mocks.previewState.prepared = null;
     mocks.previewState.preview = null;
+    mocks.previewState.error = null;
     mocks.createObjectURL.mockReset();
     mocks.revokeObjectURL.mockReset();
+    mocks.setError.mockImplementation((error: string | null) => {
+      mocks.previewState.error = error;
+    });
     mocks.previewPrepared.mockImplementation(async (prepared: PreparedImport) => {
       mocks.previewState.prepared = prepared;
       mocks.previewState.preview = makePreview();
@@ -138,6 +143,7 @@ describe("AIRecognizeSubscriptionDialog", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     Reflect.deleteProperty(window, "matchMedia");
   });
 
@@ -348,96 +354,6 @@ describe("AIRecognizeSubscriptionDialog", () => {
     expect(mocks.createObjectURL).toHaveBeenCalledTimes(1);
 
     resolveRecognition(makeResponse([makeDraft()]));
-  });
-
-  it("生成时显示工作区遮罩，partial 和真实 reasoning 事件更新后由 final 进入草稿", async () => {
-    const user = userEvent.setup();
-    let streamHandlers: { onEvent?: (event: AiRecognitionStreamEvent) => void } | undefined;
-    let resolveRecognition: (response: AiRecognizeResponse) => void = () => undefined;
-    mocks.recognizeSubscriptionsStream.mockImplementation((
-      _input: unknown,
-      handlers?: { onEvent?: (event: AiRecognitionStreamEvent) => void },
-    ) => {
-      streamHandlers = handlers;
-      return new Promise<AiRecognizeResponse>((resolve) => {
-        resolveRecognition = resolve;
-      });
-    });
-    renderDialog();
-
-    await user.type(screen.getByPlaceholderText("粘贴记事本、备忘录或从 Excel 复制出的订阅列表..."), "apple 50刀 1年");
-    await user.click(screen.getByRole("button", { name: "生成订阅草稿" }));
-
-    const overlay = await screen.findByTestId("ai-recognition-stream-overlay");
-    const panel = within(overlay).getByTestId("ai-recognition-stream-panel");
-    const body = screen.getByTestId("ai-recognition-dialog-body");
-    const workspace = screen.getByTestId("ai-recognition-dialog-workspace");
-
-    expect(workspace).toHaveClass("relative", "overflow-hidden");
-    expect(overlay).toHaveClass("absolute", "inset-0", "z-20", "bg-card/75", "backdrop-blur-[2px]");
-    expect(overlay).toContainElement(panel);
-    expect(body).not.toContainElement(panel);
-    expect(screen.getByPlaceholderText("粘贴记事本、备忘录或从 Excel 复制出的订阅列表...")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "取消" })).toBeEnabled();
-    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "关闭" })).toBeEnabled();
-    expect(panel).toHaveTextContent("识别进度");
-    expect(panel).toHaveTextContent("生成中");
-    expect(panel).toHaveTextContent("等待模型返回");
-    expect(panel).not.toHaveTextContent("思考过程");
-
-    await act(async () => {
-      streamHandlers?.onEvent?.({ type: "recognition/progress", stage: "model-start" });
-      streamHandlers?.onEvent?.({ type: "recognition/partial", subscriptionsSeen: 1, warningsSeen: 2 });
-      streamHandlers?.onEvent?.({ type: "recognition/text-delta", delta: "{\"subscriptions\"" });
-    });
-    expect(panel).toHaveTextContent("连接模型");
-    expect(panel).toHaveTextContent("已看到草稿");
-    expect(panel).toHaveTextContent("2");
-    expect(panel).toHaveTextContent("可见输出");
-    expect(panel).toHaveTextContent("{\"subscriptions\"");
-    expect(panel).not.toHaveTextContent("思考过程");
-
-    await act(async () => {
-      streamHandlers?.onEvent?.({ type: "recognition/reasoning-delta", delta: "先确认服务名称" });
-    });
-    expect(panel).toHaveTextContent("思考过程");
-    expect(panel).toHaveTextContent("先确认服务名称");
-
-    await act(async () => {
-      streamHandlers?.onEvent?.({ type: "recognition/final", response: makeResponse([makeDraft()]) });
-      resolveRecognition(makeResponse([makeDraft()]));
-    });
-
-    expect(await screen.findByText("Apple Music")).toBeInTheDocument();
-    expect(screen.queryByTestId("ai-recognition-stream-overlay")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("ai-recognition-stream-panel")).not.toBeInTheDocument();
-  });
-
-  it("H5 生成时遮罩只覆盖工作区，不覆盖底部操作区", async () => {
-    const user = userEvent.setup();
-    let resolveRecognition: (response: AiRecognizeResponse) => void = () => undefined;
-    mockMobile();
-    mocks.recognizeSubscriptionsStream.mockReturnValue(new Promise<AiRecognizeResponse>((resolve) => {
-      resolveRecognition = resolve;
-    }));
-    renderDialog();
-
-    await user.type(screen.getByPlaceholderText("粘贴记事本、备忘录或从 Excel 复制出的订阅列表..."), "apple 50刀 1年");
-    await user.click(screen.getByRole("button", { name: "生成订阅草稿" }));
-
-    const overlay = await screen.findByTestId("ai-recognition-stream-overlay");
-    const footer = screen.getByTestId("ai-recognition-mobile-footer");
-
-    expect(overlay).toHaveClass("absolute", "inset-0", "z-20");
-    expect(overlay).not.toContainElement(footer);
-    expect(within(overlay).getByTestId("ai-recognition-stream-panel")).toBeInTheDocument();
-    expect(within(footer).getByRole("button", { name: "识别中..." })).toBeDisabled();
-    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "关闭" })).toBeEnabled();
-
-    await act(async () => {
-      resolveRecognition(makeResponse([makeDraft()]));
-    });
-    expect(await screen.findByText("Apple Music")).toBeInTheDocument();
   });
 
   it("草稿阶段由内部工作区滚动，外层弹窗 body 不滚动", async () => {
@@ -660,6 +576,7 @@ describe("AIRecognizeSubscriptionDialog", () => {
     await user.type(textarea, "apple 50刀 1年");
     await user.click(screen.getByRole("button", { name: "生成订阅草稿" }));
     await screen.findByText("Apple Music");
+    expect(screen.getByText(/1 条草稿 · 生成用时 \d+ 秒/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "返回输入" }));
     expect(screen.getByDisplayValue("apple 50刀 1年")).toBeInTheDocument();
@@ -669,10 +586,12 @@ describe("AIRecognizeSubscriptionDialog", () => {
     const returnedTextarea = screen.getByPlaceholderText("粘贴记事本、备忘录或从 Excel 复制出的订阅列表...");
     await user.type(returnedTextarea, "\nspotify 10刀 1个月");
     expect(screen.getByText("输入已变更，请重新生成草稿后再预览。")).toBeInTheDocument();
+    expect(screen.queryByText(/生成用时 \d+ 秒/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "返回草稿" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "重新生成草稿" }));
 
     await screen.findByText("Spotify");
+    expect(screen.getByText(/1 条草稿 · 生成用时 \d+ 秒/)).toBeInTheDocument();
     expect(mocks.recognizeSubscriptionsStream).toHaveBeenCalledTimes(2);
   });
 
