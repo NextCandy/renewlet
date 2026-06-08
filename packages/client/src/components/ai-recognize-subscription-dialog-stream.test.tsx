@@ -137,6 +137,7 @@ describe("AIRecognizeSubscriptionDialog stream overlay", () => {
     fireEvent.change(screen.getByPlaceholderText(TEXT_PLACEHOLDER), { target: { value: "apple 50刀 1年" } });
     fireEvent.click(screen.getByRole("button", { name: "生成订阅草稿" }));
 
+    // 遮罩必须挂在 workspace 上方而不是 body portal，否则移动端 footer/滚动容器会和流式状态错层。
     const overlay = screen.getByTestId("ai-recognition-stream-overlay");
     const panel = within(overlay).getByTestId("ai-recognition-stream-panel");
     expect(screen.getByTestId("ai-recognition-dialog-workspace")).toHaveClass("relative", "overflow-hidden");
@@ -179,6 +180,7 @@ describe("AIRecognizeSubscriptionDialog stream overlay", () => {
       resolveRecognition(makeResponse([makeDraft()]));
       await Promise.resolve();
     });
+    // final 是唯一进入草稿列表的事件；前面的 text/reasoning delta 只允许影响状态面板。
     expect(screen.getByText("Apple Music")).toBeInTheDocument();
     expect(screen.getByText(/1 条草稿 · 生成用时 \d+ 秒/)).toBeInTheDocument();
     expect(screen.queryByTestId("ai-recognition-stream-overlay")).not.toBeInTheDocument();
@@ -235,6 +237,7 @@ describe("AIRecognizeSubscriptionDialog stream overlay", () => {
     await enterTextAndGenerate(user, "\nspotify 10刀 1个月", "重新生成草稿");
 
     const overlay = await screen.findByTestId("ai-recognition-stream-overlay");
+    // 错误态遮罩只解释本次失败；重新生成必须回到 footer，保证新 runId/AbortController 重新建立。
     expect(within(overlay).queryByRole("button", { name: "重新生成草稿" })).not.toBeInTheDocument();
     await user.click(within(overlay).getByRole("button", { name: "关闭" }));
     await user.click(screen.getByRole("button", { name: "重新生成草稿" }));

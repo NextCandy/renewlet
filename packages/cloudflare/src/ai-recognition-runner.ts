@@ -77,6 +77,11 @@ class AIRecognitionGenerationError extends Error {
   }
 }
 
+/**
+ * 执行非流式 AI 识别并返回结构化导入草稿。
+ *
+ * 模型输出会经过“生成 -> 原文 JSON 恢复 -> schema repair -> 最终规范化”链路；失败时只返回脱敏 diagnostics。
+ */
 export async function runAIRecognition({
   settings,
   input,
@@ -188,6 +193,11 @@ export async function runAIRecognition({
   }
 }
 
+/**
+ * 执行流式 AI 识别。
+ *
+ * SSE 中的 progress/partial/text/reasoning 只服务前端进度面板，最终草稿仍只来自 recognition/final 的结构化对象。
+ */
 export async function runAIRecognitionStream({
   settings,
   input,

@@ -29,6 +29,11 @@ type NormalizedModelList = {
   truncated: boolean;
 };
 
+/**
+ * listAIModels 是用户显式刷新模型列表的认证代理。
+ *
+ * API key 只在 Worker 内用于第三方 `/models` 请求，不入库、不返回给浏览器，也不由前端直连 provider。
+ */
 export async function listAIModels(request: Request, env: Env): Promise<Response> {
   const locale = requestLocale(request);
   await requireAuth(request, env);
@@ -149,6 +154,7 @@ async function readAIModelListResponseText(response: Response, locale: AppLocale
     if (done) break;
     total += value.byteLength;
     if (total > AI_MODEL_LIST_RESPONSE_BYTES) {
+      // 第三方模型接口不应返回海量正文；超限直接取消 reader，避免 Worker 内存被 provider 错误页放大。
       await reader.cancel().catch(() => undefined);
       throw new HttpError(
         413,
@@ -170,6 +176,7 @@ function normalizeAIModelList(shape: AIModelListResponseShape, raw: unknown): No
       : normalizeOpenAIShapeModels(raw);
   const deduped = dedupeModels(models);
   return {
+    // 截断只影响候选展示，用户仍可手输模型 ID；列表不能成为超大 provider 响应的搬运通道。
     models: deduped.slice(0, AI_RECOGNITION_MAX_MODEL_LIST_MODELS),
     truncated: deduped.length > AI_RECOGNITION_MAX_MODEL_LIST_MODELS,
   };

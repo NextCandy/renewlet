@@ -7,6 +7,11 @@ import {
 
 export type AIModelListResponseShape = "openai" | "anthropic" | "gemini";
 
+/**
+ * ResolvedAIProviderEndpoint 是 AI provider 的运行时派生结果。
+ *
+ * 前端设置页、Go SDK client 和 Cloudflare Worker 共享这份解析逻辑，避免 base URL、鉴权头和模型列表 URL 分叉。
+ */
 export interface ResolvedAIProviderEndpoint {
   providerType: AiRecognitionProviderType;
   transportProtocol: AiRecognitionTransportProtocol;
@@ -41,6 +46,11 @@ const ANTHROPIC_ENDPOINT_SUFFIXES = ["/messages", "/models"] as const;
 const VERSION_SEGMENT_PATTERN = /\/v\d+(?:alpha|beta)?(?=\/|$)/i;
 const TRAILING_VERSION_SEGMENT_PATTERN = /\/v\d+(?:alpha|beta)?$/i;
 
+/**
+ * 解析 AI provider 的请求入口。
+ *
+ * transportProtocol 由 providerType canonical 派生；用户传入的 protocol 只作为历史数据形状存在，不能改变 SDK 分派。
+ */
 export function resolveAIProviderEndpoint(settings: AIProviderEndpointSettings): ResolvedAIProviderEndpoint {
   // 协议是跨 Go/Worker/前端的运行时派生字段，不是用户配置项；入口处覆盖错配值，避免平台和 SDK 分派漂移。
   const transportProtocol = canonicalAIRecognitionTransportProtocol(settings.providerType);
@@ -66,6 +76,11 @@ export function isAIProviderBaseUrlRequired(providerType: AiRecognitionProviderT
   return defaultBaseUrlForSettings(providerType) === "";
 }
 
+/**
+ * 规范化第三方 API base URL。
+ *
+ * 末尾 `#` 是显式禁用自动补版本号的逃生阀，用于兼容私有网关或 OpenAI-compatible 转发层。
+ */
 export function normalizeAIProviderBaseUrl(
   transportProtocol: AiRecognitionTransportProtocol,
   baseUrl: string,
