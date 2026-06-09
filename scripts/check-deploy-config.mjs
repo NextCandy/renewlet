@@ -285,6 +285,26 @@ function checkCloudflareDeployButtonVars() {
   }
 }
 
+function checkCloudflareDeployButtonVersionFallback() {
+  const workerSystem = readFileSync(join(repoRoot, "packages/cloudflare/src/system.ts"), "utf8");
+
+  // Deploy Button 不一定有 CI 版本变量；Worker 缺元信息时必须显示 package stable version，不能再合成 dev 后缀。
+  for (const snippet of [
+    "`${rootPackageJson.version}-dev",
+    'rootPackageJson.version + "-dev',
+    "rootPackageJson.version}-dev",
+  ]) {
+    if (workerSystem.includes(snippet)) {
+      throw new Error(`Cloudflare system version fallback must not synthesize dev versions: ${snippet}`);
+    }
+  }
+  for (const snippet of ["PLACEHOLDER_DEV_VERSION_PATTERN", "return rootPackageJson.version;"]) {
+    if (!workerSystem.includes(snippet)) {
+      throw new Error(`Cloudflare system version fallback must keep Deploy Button stable-version guard: ${snippet}`);
+    }
+  }
+}
+
 function checkCloudflareWorkflowBuildMetadata() {
   const selfHostedWorkflow = readFileSync(join(repoRoot, ".github/workflows/cloudflare-worker.yml"), "utf8");
   const releaseWorkflow = readFileSync(join(repoRoot, ".github/workflows/release-publish.yml"), "utf8");
@@ -323,6 +343,7 @@ checkCloudflareDeployMigrationScript();
 checkCloudflareScheduledLocalRoute();
 checkCloudflareFreshD1Migrations();
 checkCloudflareDeployButtonVars();
+checkCloudflareDeployButtonVersionFallback();
 checkCloudflareWorkflowBuildMetadata();
 checkComposeConfig();
 
